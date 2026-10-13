@@ -1,0 +1,26 @@
+services:
+  elasticsearch:
+    image: elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - elasticsearch:/usr/share/elasticsearch/data
+    networks:
+      default:
+        aliases: [search]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s'"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  php:
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  elasticsearch:

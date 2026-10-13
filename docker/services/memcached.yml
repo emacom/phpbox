@@ -1,0 +1,4 @@
+services:
+  memcached:
+    image: memcached:${MEMCACHED_TAG:-1.6-alpine}
+    command: memcached -m 256

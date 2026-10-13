@@ -1,0 +1,15 @@
+services:
+  rabbitmq:
+    image: rabbitmq:${RABBITMQ_TAG:-3.13-management-alpine}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  php:
+    depends_on:
+      rabbitmq:
+        condition: service_healthy

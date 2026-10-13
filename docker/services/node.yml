@@ -1,0 +1,15 @@
+services:
+  node:
+    image: node:${NODE_TAG:-22-alpine}
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /var/www/html
+    command: ["sleep", "infinity"]
+    init: true
+    environment:
+      HOME: /tmp
+      npm_config_cache: /cache/npm
+    volumes:
+      - ${WWW_DIR}:/var/www/html
+      - ${CACHE_DIR}:/cache
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro

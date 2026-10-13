@@ -1,0 +1,5 @@
+services:
+  web:
+    volumes:
+      - ../platforms/magento/fastcgi_params:/etc/nginx/fastcgi_params:ro
+      - ${ENV_DIR}/nginx:/etc/nginx/phpbox:ro

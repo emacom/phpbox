@@ -1,0 +1,14 @@
+services:
+  valkey:
+    image: valkey/valkey:${VALKEY_TAG:-8.1-alpine}
+    command: valkey-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  php:
+    depends_on:
+      valkey:
+        condition: service_healthy

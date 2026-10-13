@@ -1,0 +1,9 @@
+services:
+  cron:
+    extends:
+      file: compose.yml
+      service: php
+    command: ["bash", "-c", "[ -n \"$$CRON_COMMAND\" ] || echo 'No cron command for this platform (CRON_COMMAND)'; while :; do [ -z \"$$CRON_COMMAND\" ] || bash -c \"$$CRON_COMMAND\"; sleep 60; done"]
+    init: true
+    environment:
+      CRON_COMMAND: ${CRON_COMMAND:-}

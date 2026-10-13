@@ -1,0 +1,37 @@
+services:
+  proxy:
+    image: nginx:stable-alpine
+    container_name: phpbox-proxy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HTTP_PORT}:80"
+      - "[::1]:${HTTP_PORT}:80"
+      - "127.0.0.1:${HTTPS_PORT}:443"
+      - "[::1]:${HTTPS_PORT}:443"
+    volumes:
+      - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${CACHE_DIR}/certs:/certs:ro
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: phpbox-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT}:8025"
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    container_name: phpbox-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PHPMYADMIN_PORT}:80"
+    environment:
+      PHPBOX_DB_ROOT_PASS: ${DB_ROOT_PASS}
+      UPLOAD_LIMIT: 1G
+    volumes:
+      - ./phpmyadmin.php:/etc/phpmyadmin/config.user.inc.php:ro
+      - ${BOXES_DIR}:/boxes:ro
+
+networks:
+  default:
+    name: phpbox

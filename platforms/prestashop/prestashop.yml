@@ -1,0 +1,4 @@
+services:
+  web:
+    volumes:
+      - ${ENV_DIR}/nginx:/etc/nginx/phpbox:ro

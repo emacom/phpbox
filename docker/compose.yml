@@ -1,0 +1,77 @@
+services:
+  web:
+    image: nginx:stable-alpine
+    volumes:
+      - ${WWW_DIR}:/var/www/html:ro
+      - ${NGINX_CONF}:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+
+  php:
+    image: ${PHP_IMAGE}:${PHP_VERSION}
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /var/www/html
+    environment:
+      SHOP_TZ: ${SHOP_TZ}
+      HOME: /tmp
+      PATH: /opt/phpbox/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      COMPOSER_HOME: /cache/composer
+      COMPOSER_MEMORY_LIMIT: "-1"
+      COMPOSER_NO_AUDIT: "1"
+      COMPOSER_NO_SECURITY_BLOCKING: "1"
+      WP_CLI_CACHE_DIR: /cache/wp-cli
+      SSL_CERT_FILE: /cache/certs/ca-bundle.pem
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - ${WWW_DIR}:/var/www/html
+      - ${CACHE_DIR}:/cache
+      - ${CACHE_DIR}/bin:/opt/phpbox/bin:ro
+      - ./php.ini:/usr/local/etc/php/conf.d/zz-phpbox.ini:ro
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+    networks:
+      - default
+      - phpbox
+    depends_on:
+      db:
+        condition: service_healthy
+
+  loopback:
+    image: alpine/socat:1.8.0.3
+    network_mode: service:php
+    entrypoint: ["sh", "-c"]
+    command:
+      - socat TCP-LISTEN:${HTTP_PORT},fork,reuseaddr TCP:web:80 & exec socat TCP-LISTEN:${HTTPS_PORT},fork,reuseaddr TCP:phpbox-proxy:443
+    depends_on:
+      - php
+      - web
+
+  db:
+    image: ${DB_IMAGE}
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASS}
+    command: --sql-mode=NO_ENGINE_SUBSTITUTION --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --max-allowed-packet=1G
+    ports:
+      - "127.0.0.1:${DB_PORT}:3306"
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+networks:
+  phpbox:
+    external: true
+
+volumes:
+  db:

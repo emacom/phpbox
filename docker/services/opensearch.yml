@@ -1,0 +1,27 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:${OPENSEARCH_TAG:-2.19.1}
+    environment:
+      discovery.type: single-node
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - opensearch:/usr/share/opensearch/data
+    networks:
+      default:
+        aliases: [search]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s'"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  php:
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+volumes:
+  opensearch:
