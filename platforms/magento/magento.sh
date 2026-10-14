@@ -157,11 +157,13 @@ _mage_prefix() {
 }
 
 p_after_import() {
-  local table prefix url engine
+  local table prefix url engine active
   prefix=$(_mage_prefix)
   table="${prefix}core_config_data"
   url="$(shop_url)/"
   engine=$(_mage_engine)
+  active=$(db_exec -N "$DB_NAME" -e "SELECT value FROM \`$table\` WHERE path = 'catalog/search/engine' AND scope = 'default'" </dev/null)
+  [[ "$active" == elasticsuite ]] || active="$engine"
   [[ -n "$prefix" ]] && log "Table prefix: $prefix"
 
   log "Configuring database for $url…"
@@ -182,7 +184,7 @@ INSERT INTO \`$table\` (scope, scope_id, path, value) VALUES
   ('default', 0, 'web/secure/base_url', '$url'),
   ('default', 0, 'web/secure/use_in_frontend', '1'),
   ('default', 0, 'web/secure/use_in_adminhtml', '1'),
-  ('default', 0, 'catalog/search/engine', '$engine'),
+  ('default', 0, 'catalog/search/engine', '$active'),
   ('default', 0, 'catalog/search/${engine}_server_hostname', 'search'),
   ('default', 0, 'catalog/search/${engine}_server_port', '9200'),
   ('default', 0, 'catalog/search/${engine}_index_prefix', 'magento2'),
