@@ -125,14 +125,14 @@ cmd_start() { load_env "${1:-}"; box_up; print_info; }
 # Stop a box and remove its containers: cmd_stop <name>
 cmd_stop() { load_env "${1:-}"; box_down; }
 
-# Stop all boxes and shared containers; running boxes are saved to boxes/.up.
+# Remove containers of all boxes and shared containers; running boxes are saved to boxes/.up.
 cmd_down() {
   local f n running=()
   for f in "$BOXES_DIR"/*/.env; do
     [[ -f "$f" ]] || continue
     n=$(basename "$(dirname "$f")")
-    box_running "$n" || continue
-    running+=("$n")
+    box_exists "$n" || continue
+    box_running "$n" && running+=("$n")
     log "Stopping '$n'…"
     ( load_env "$n"; box_down )
   done

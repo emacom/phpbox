@@ -49,7 +49,7 @@
 | `reset` | `load_env` → `box_up` → `db_load` from the snapshot → `rsync` of files, except `project` → `p_clear_cache` |
 | `start` / `stop` | `load_env` → `box_up` / `box_down` |
 | `up` | `ensure_tools` → `shared_up` → `box_up` of every box from `boxes/.up` |
-| `down` | `box_down` of every running box → list saved to `boxes/.up` → `shared down` |
+| `down` | `box_down` of every box with containers → running ones saved to `boxes/.up` → `shared down` |
 | `remove` | `load_env` → `compose down -v` → removal of `boxes/<name>` and the certificate |
 
 ## `box_up`

@@ -64,6 +64,9 @@ box_down() {
 # Return 0 when the box has a running container: box_running <name>
 box_running() { [[ -n "$(docker compose -p "phpbox-$1" ps -q --status running 2>/dev/null)" ]]; }
 
+# Return 0 when the box has any container, running or not: box_exists <name>
+box_exists() { [[ -n "$(docker compose -p "phpbox-$1" ps -aq 2>/dev/null)" ]]; }
+
 # Return 0 when the shared proxy container is running.
 shared_running() { [[ -n "$(docker ps -q --filter name='^phpbox-proxy$' 2>/dev/null)" ]]; }
 
