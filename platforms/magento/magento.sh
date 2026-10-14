@@ -224,6 +224,9 @@ fi
 if [[ " $SERVICES " == *" rabbitmq "* ]]; then
   args+=(--amqp-host=rabbitmq --amqp-port=5672 --amqp-user=guest --amqp-password=guest --amqp-virtualhost=/)
 fi
+if [[ "$(bin/magento setup:config:set --help)" == *--es-hosts* ]]; then
+  args+=(--es-hosts=search:9200 --es-enable-ssl=0)
+fi
 bin/magento setup:config:set -n "${args[@]}"
 php -r '$f = "app/etc/env.php"; $c = include $f; $c["install"]["date"] ??= date("D, d M Y H:i:s O"); $c["MAGE_MODE"] = "developer";
   file_put_contents($f, "<?php\nreturn " . var_export($c, true) . ";\n");'
@@ -238,7 +241,7 @@ bin/magento indexer:reindex || echo "Reindex finished with errors; check: bin/ma
 bin/magento cache:enable
 bin/magento cache:flush
 SH
-  } | php_run -e M_PREFIX="$prefix" -e M_ADMIN="$P_ADMIN_PATH" -e SERVICES="$(service_names)"
+  } | php_run -e M_PREFIX="$prefix" -e M_ADMIN="$P_ADMIN_PATH" -e SERVICES="$(service_names)" || return 1
   compose exec -T web nginx -s reload
 }
 
