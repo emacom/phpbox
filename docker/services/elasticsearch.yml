@@ -1,6 +1,10 @@
 services:
   elasticsearch:
-    image: elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}
+    image: phpbox/elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}
+    build:
+      dockerfile_inline: |
+        FROM elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}
+        RUN bin/elasticsearch-plugin install --batch analysis-icu analysis-phonetic
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"

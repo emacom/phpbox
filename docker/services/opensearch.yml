@@ -1,6 +1,10 @@
 services:
   opensearch:
-    image: opensearchproject/opensearch:${OPENSEARCH_TAG:-2.19.1}
+    image: phpbox/opensearch:${OPENSEARCH_TAG:-2.19.1}
+    build:
+      dockerfile_inline: |
+        FROM opensearchproject/opensearch:${OPENSEARCH_TAG:-2.19.1}
+        RUN bin/opensearch-plugin install --batch analysis-icu analysis-phonetic
     environment:
       discovery.type: single-node
       cluster.routing.allocation.disk.threshold_enabled: "false"

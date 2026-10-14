@@ -91,8 +91,8 @@ SERVICES='opensearch:2.19.1 redis:7.4-alpine node:14-alpine'
 | `redis` | `redis:${REDIS_TAG:-7.2-alpine}` | `redis` | No disk persistence |
 | `valkey` | `valkey/valkey:${VALKEY_TAG:-8.1-alpine}` | `valkey` | Redis replacement |
 | `rabbitmq` | `rabbitmq:${RABBITMQ_TAG:-3.13-management-alpine}` | `rabbitmq` | Panel at the address from `phpbox info` (`guest` / `guest`). Requires a `-management` tag |
-| `opensearch` | `opensearchproject/opensearch:${OPENSEARCH_TAG:-2.19.1}` | `search` | Disk watermarks disabled |
-| `elasticsearch` | `elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}` | `search` | Disk watermarks disabled |
+| `opensearch` | `phpbox/opensearch:${OPENSEARCH_TAG:-2.19.1}`, built from `opensearchproject/opensearch` | `search` | Disk watermarks disabled, plugins `analysis-icu` and `analysis-phonetic` |
+| `elasticsearch` | `phpbox/elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}`, built from `elasticsearch` | `search` | Disk watermarks disabled, plugins `analysis-icu` and `analysis-phonetic` |
 | `memcached` | `memcached:${MEMCACHED_TAG:-1.6-alpine}` | `memcached` | 256 MB |
 | `cron` | image and volumes of the `php` service (`extends`) | — | Runs the platform `P_CRON` every 60 s |
 | `node` | `node:${NODE_TAG:-22-alpine}` | — | Tool container with `www/` and the host UID. Entry: `phpbox shell <name> node` |
