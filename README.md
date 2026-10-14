@@ -40,6 +40,9 @@ phpbox create prestashop 9                     # latest stable 9.x
 phpbox create mageos latest
 phpbox create magento 2.4.8-p3 --name client
 phpbox create woocommerce 10 --wp 6.8.3 --lang en
+
+phpbox clone <platform> git@gitlab.example:client/project.git --branch develop
+phpbox db-import project ~/dumps/project.sql.gz
 ```
 
 Addresses and credentials: `phpbox info <name>`.
