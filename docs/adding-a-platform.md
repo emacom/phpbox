@@ -27,14 +27,14 @@ A platform is a `platforms/<name>/` directory. The directory name is the `<platf
 | Function | Required | Called by | Task |
 |---|---|---|---|
 | `p_resolve <version>` | yes | `create` | Sets `VERSION`, `PHP_VERSION`, `DB_IMAGE`, `DOWNLOAD_URL` |
-| `p_install` | yes | `create` | Installs the platform in `www/` via `php_run` |
+| `p_install` | yes | `create` | Installs the platform in `WWW_DIR` via `php_run` |
 | `p_versions` | yes | `versions` | Prints available versions |
 | `p_info` | yes | `create`, `copy`, `db-import`, `start`, `info` | Prints the shop and admin addresses |
-| `p_snapshot_excludes` | yes | `create`, `snapshot`, `reset`, `copy`, `db-import` | Prints paths in `www/` skipped by the snapshot |
+| `p_snapshot_excludes` | yes | `create`, `snapshot`, `reset`, `copy`, `db-import` | Prints paths in `WWW_DIR` skipped by the snapshot |
 | `p_clear_cache` | yes | `reset` | Clears the cache after a snapshot restore |
 | `p_option <flag> <value>` | no | `create` | Handles custom flags. Returns 1 for an unknown flag |
 | `p_rehost <old-url>` | no | `copy` | Points the copied database at the new address |
-| `p_clone_detect` | no | `clone` | Sets `VERSION`, `PHP_VERSION`, `DB_IMAGE` based on `www/` |
+| `p_clone_detect` | no | `clone` | Sets `VERSION`, `PHP_VERSION`, `DB_IMAGE` based on `WWW_DIR` |
 | `p_project_install` | no | `clone` | Installs project dependencies |
 | `p_after_import` | no | `db-import` | Configures the imported database and files for the box |
 
@@ -80,7 +80,7 @@ A new version API requires a `rows_<source>` function in `src/versions.py`.
 | Requirement | Reason |
 |---|---|
 | `listen 80 default_server;` | `phpbox-proxy` connects to `phpbox-<name>-web-1:80` |
-| `root /var/www/html;` | `www/` is mounted at this path in `web` and `php` |
+| `root /var/www/html;` | `WWW_DIR` is mounted at this path in `web` and `php` |
 | `fastcgi_pass php:9000;` | PHP-FPM service in the box compose project |
 | `fastcgi_param HTTPS $fastcgi_https if_not_empty;` with the `$fastcgi_https` map | TLS terminates in `phpbox-proxy`, PHP learns about HTTPS from the header |
 

@@ -100,7 +100,7 @@ eq "box answers after up" "$(status "$url/")" 200
 if [[ "$PLATFORM" == woocommerce ]]; then
   section "Clone and db-import"
   repo="$TMP/repo"
-  mkdir -p "$repo" && cp -r "$PHPBOX_BOXES_DIR/$BOX/www/wp-content" "$repo/"
+  mkdir -p "$repo" && cp -r "$PHPBOX_BOXES_DIR/$BOX/$BOX/wp-content" "$repo/"
   printf '/*\n!/wp-content/\n!/.gitignore\n' > "$repo/.gitignore"
   git -C "$repo" init -q && git -C "$repo" add -A && git -C "$repo" -c user.email=t@t -c user.name=t commit -qm init
   docker exec -u "$(id -u)" "phpbox-$BOX-php-1" wp search-replace "$url" https://shop.example.com --all-tables --export=/cache/smoke-prod.sql --quiet

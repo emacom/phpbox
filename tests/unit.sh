@@ -62,6 +62,11 @@ eq "init_env sets host, database and ports" \
 mkdir -p "$PHPBOX_BOXES_DIR/used" && printf 'PORT=45000\nDB_PORT=55000\n' > "$PHPBOX_BOXES_DIR/used/.env"
 eq "next_port skips a port used by another box" "$(next_port)" "45001"
 rm -rf "$PHPBOX_BOXES_DIR/used"
+eq "init_env puts the code in boxes/<name>/<name>" "$(init_env code-dir; echo "$WWW_DIR")" "$PHPBOX_BOXES_DIR/code-dir/code-dir"
+mkdir -p "$PHPBOX_BOXES_DIR/legacy/www"
+eq "set_www_dir keeps www/ of an older box" "$(NAME=legacy; set_www_dir; echo "$WWW_DIR")" "$PHPBOX_BOXES_DIR/legacy/www"
+rm -rf "$PHPBOX_BOXES_DIR/legacy"
+check_fails "init_env rejects the name of a box subdirectory" init_env snapshot
 eq "save_env and load_env keep the values" "$(
   load_platform woocommerce; init_env roundtrip
   VERSION=10.1.0 PHP_VERSION=8.3 DB_IMAGE=mariadb:11.4 KIND=fresh WP_VERSION=6.8.3 SERVICES="redis"

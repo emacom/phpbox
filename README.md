@@ -95,7 +95,7 @@ SERVICES='opensearch:2.19.1 redis:7.4-alpine node:14-alpine'
 | `elasticsearch` | `phpbox/elasticsearch:${ELASTICSEARCH_TAG:-7.17.25}`, built from `elasticsearch` | `search` | Disk watermarks disabled, plugins `analysis-icu` and `analysis-phonetic` |
 | `memcached` | `memcached:${MEMCACHED_TAG:-1.6-alpine}` | `memcached` | 256 MB |
 | `cron` | image and volumes of the `php` service (`extends`) | — | Runs the platform `P_CRON` every 60 s |
-| `node` | `node:${NODE_TAG:-22-alpine}` | — | Tool container with `www/` and the host UID. Entry: `phpbox shell <name> node` |
+| `node` | `node:${NODE_TAG:-22-alpine}` | — | Tool container with the box code and the host UID. Entry: `phpbox shell <name> node` |
 
 | Situation | Action |
 |---|---|
@@ -130,7 +130,7 @@ platforms/<p>/           # platform.sh, nginx.conf, README.md
 docs/                    # how phpbox works, adding a platform
 tests/                   # tests: tests/run.sh
 cache/                   # packages, composer and wp-cli cache, bin/{composer,wp,mailpit}, certs/
-boxes/<name>/{.env,www/,snapshot/,nginx/}
+boxes/<name>/{.env,<name>/,snapshot/,nginx/}  # code in <name>/, boxes created earlier keep www/
 boxes/.up                # boxes running before phpbox down
 ```
 
@@ -159,7 +159,7 @@ PHP images cover versions 8.0–8.5.
 | File reset | `rsync --delete` from the snapshot |
 | Cleanup | Platform `p_clear_cache` |
 
-A full `reset` overwrites code edited in `boxes/<name>/www`. Use `reset --db-only` in that case.
+A full `reset` overwrites code edited in `boxes/<name>/<name>`. Use `reset --db-only` in that case.
 
 ```bash
 phpbox create prestashop 8.2 --name module-test
@@ -178,7 +178,7 @@ phpbox copy m249 m249-a
 | Step | Mechanism |
 |---|---|
 | Database | `mariadb-dump` of the source → import into the new container |
-| Files | `rsync` of `www/` without paths from `p_snapshot_excludes` |
+| Files | `rsync` of the box code without paths from `p_snapshot_excludes` |
 | Addresses | Platform `p_rehost <old-url>` |
 | Snapshot | New, with the state after the copy |
 

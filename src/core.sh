@@ -82,12 +82,19 @@ load_platform() {
   source "$f"
 }
 
+# Set WWW_DIR to boxes/<name>/<name>, or to boxes/<name>/www for boxes created before the rename.
+set_www_dir() {
+  WWW_DIR="$BOXES_DIR/$NAME/$NAME"
+  [[ -d "$BOXES_DIR/$NAME/www" ]] && WWW_DIR="$BOXES_DIR/$NAME/www"
+  return 0
+}
+
 # Load an existing box from boxes/<name>/.env together with its platform: load_env <name>
 load_env() {
   NAME="${1:-}"; [[ -n "$NAME" ]] || die "Environment name required (phpbox list)"
   ENV_FILE="$BOXES_DIR/$NAME/.env"
   [[ -f "$ENV_FILE" ]] || die "Environment '$NAME' does not exist"
-  WWW_DIR="$BOXES_DIR/$NAME/www"
+  set_www_dir
   SHOP_HOST=localhost KIND=fresh SERVICES="" DB_NAME=shop SEARCH=""
   # shellcheck source=/dev/null
   source "$ENV_FILE"
@@ -100,13 +107,14 @@ init_env() {
   NAME="$1"
   [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "Name: lowercase letters, digits and '-' only"
   [[ " $SHARED_HOSTS " == *" $NAME "* ]] && die "Name '$NAME' is reserved for $NAME.localhost"
+  [[ " snapshot nginx " == *" $NAME "* ]] && die "Name '$NAME' is reserved for boxes/<name>/$NAME"
   [[ -e "$BOXES_DIR/$NAME" ]] && die "Environment '$NAME' already exists (phpbox remove $NAME or --name)"
   PORT=$(next_port)
   DB_PORT=$((PORT + DB_PORT_OFFSET))
   SHOP_HOST="$NAME.localhost"
   DB_NAME="${NAME//-/_}"
   HOST_UID=$(id -u) HOST_GID=$(id -g)
-  WWW_DIR="$BOXES_DIR/$NAME/www"
+  set_www_dir
   ENV_FILE="$BOXES_DIR/$NAME/.env"
 }
 

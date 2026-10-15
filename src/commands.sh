@@ -63,13 +63,13 @@ cmd_db_import() {
 
 # Copy a box with its current database under a new name and address: cmd_copy <source> <name>
 cmd_copy() {
-  local src="${1:-}" dst="${2:-}" src_db src_url dump; shift 2 || true
+  local src="${1:-}" dst="${2:-}" src_db src_url src_www dump; shift 2 || true
   [[ -n "$src" && -n "$dst" ]] || die "Usage: phpbox copy <source> <name>"
   [[ $# -eq 0 ]] || die "Unknown option: $1"
   load_env "$src"
   declare -F p_rehost >/dev/null || die "Platform '$PLATFORM' does not support copy"
   ( init_env "$dst" )
-  src_db="$DB_NAME" src_url=$(shop_url) dump="$BOXES_DIR/$src/copy-$dst.sql.gz"
+  src_db="$DB_NAME" src_url=$(shop_url) src_www="$WWW_DIR" dump="$BOXES_DIR/$src/copy-$dst.sql.gz"
 
   box_up
   log "Dumping '$src' database…"
@@ -80,7 +80,7 @@ cmd_copy() {
   log "Copying files…"
   mkdir -p "$BOXES_DIR/$NAME"
   # shellcheck disable=SC2046
-  rsync -a $(snapshot_excludes) "$BOXES_DIR/$src/www/" "$WWW_DIR/"
+  rsync -a $(snapshot_excludes) "$src_www/" "$WWW_DIR/"
   [[ -f "$BOXES_DIR/$src/compose.yml" ]] && cp "$BOXES_DIR/$src/compose.yml" "$BOXES_DIR/$NAME/compose.yml"
   save_env
 
@@ -162,7 +162,7 @@ cmd_remove() {
   local answer
   load_env "${1:-}"
   if [[ "${2:-}" != "-y" ]]; then
-    [[ "$KIND" == project ]] && echo "WARNING: www/ is a git repository; unpushed changes will be lost ($WWW_DIR)"
+    [[ "$KIND" == project ]] && echo "WARNING: the code directory is a git repository; unpushed changes will be lost ($WWW_DIR)"
     read -r -p "Remove environment '$NAME' with its database and files? [y/N] " answer
     [[ "$answer" =~ ^[yY]$ ]] || exit 0
   fi

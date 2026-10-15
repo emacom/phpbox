@@ -34,7 +34,7 @@
 | `VERSION`, `PHP_VERSION`, `DB_IMAGE` | `p_resolve` on `create`, `p_clone_detect` on `clone` |
 | `KIND` | `fresh` for `create`, `project` for `clone` |
 | `SERVICES` | `--<service>[:tag]` flags and services added by the platform in `p_resolve`/`p_clone_detect`, e.g. the Magento search engine. Entries are `<name>` or `<name>:<tag>` |
-| `WWW_DIR`, `ENV_FILE` | `boxes/<name>/www`, `boxes/<name>/.env` |
+| `WWW_DIR`, `ENV_FILE` | `boxes/<name>/<name>` (`boxes/<name>/www` when it exists), `boxes/<name>/.env` |
 
 `save_env` writes the variables listed in `ENV_KEYS` and the platform `P_ENV_KEYS`. There is no template `.env` file.
 
@@ -45,7 +45,7 @@
 | `create` | `load_platform` → `parse_options` → `p_resolve` → `init_env` → `save_env` → `box_up` → `p_install` → `take_snapshot` → `print_info` |
 | `clone` | `load_platform` → `parse_options` → `init_env` → `git clone` → `p_clone_detect` → `save_env` → `write_ssh_override` → `box_up` → `p_project_install` |
 | `db-import` | `load_env` → `box_up` → `dump_decompress` + `dump_fix` + `db_load` → `p_after_import` → `take_snapshot` |
-| `copy` | `load_env` of the source → `box_up` → `db_dump` → `init_env` of the target → `rsync www/` → `save_env` → `box_up` → `db_load` → `p_rehost` → `take_snapshot` |
+| `copy` | `load_env` of the source → `box_up` → `db_dump` → `init_env` of the target → `rsync` of the source `WWW_DIR` → `save_env` → `box_up` → `db_load` → `p_rehost` → `take_snapshot` |
 | `reset` | `load_env` → `box_up` → `db_load` from the snapshot → `rsync` of files, except `project` → `p_clear_cache` |
 | `start` / `stop` | `load_env` → `box_up` / `box_down` |
 | `up` | `ensure_tools` → `shared_up` → `box_up` of every box from `boxes/.up` |
