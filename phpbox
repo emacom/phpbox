@@ -25,6 +25,7 @@ ADMIN_PASSWORD=admin123
 MAGENTO_PUBLIC_KEY=""
 MAGENTO_PRIVATE_KEY=""
 GITHUB_TOKEN=""
+UPDATE_CHECK=1
 CONF_FILE="${PHPBOX_CONF:-$ROOT/phpbox.conf}"
 # shellcheck source=/dev/null
 [[ -f "$CONF_FILE" ]] && source "$CONF_FILE"
@@ -35,7 +36,7 @@ DB_USER=shop DB_PASS=shop DB_ROOT_PASS=root
 ENV_KEYS="PLATFORM NAME VERSION PORT DB_PORT DB_NAME PHP_VERSION DB_IMAGE DOWNLOAD_URL SHOP_HOST SHOP_LANG SHOP_COUNTRY SHOP_CURRENCY SHOP_TZ ADMIN_USER ADMIN_EMAIL ADMIN_PASSWORD HOST_UID HOST_GID KIND SERVICES"
 OPT_NAME="" OPT_PHP="" OPT_BRANCH=""
 
-for lib in core docker tls database commands; do
+for lib in core docker tls database commands update; do
   # shellcheck source=/dev/null
   source "$ROOT/src/$lib.sh"
 done
@@ -62,6 +63,7 @@ phpbox — local PHP shops and apps on Docker, with snapshots
   info <name>                          URLs, credentials, PHP, size, volumes, containers
   versions <platform>                  available versions
   shell <name> [service]               shell in the PHP (or given service) container
+  exec <name> [--service S] <cmd...>   run a command in the PHP (or given service) container, no TTY
   db <name>                            MariaDB console
   logs <name>                          container logs
 
@@ -88,8 +90,9 @@ USAGE
 
 for b in docker rsync curl; do command -v "$b" >/dev/null || die "Missing program: $b"; done
 cmd="${1:-help}"; shift || true
+update_notice
 case "$cmd" in
-  create|clone|copy|snapshot|reset|start|stop|up|down|remove|list|info|versions|shell|db|logs) "cmd_$cmd" "$@" ;;
+  create|clone|copy|snapshot|reset|start|stop|up|down|remove|list|info|versions|shell|exec|db|logs) "cmd_$cmd" "$@" ;;
   db-import) cmd_db_import "$@" ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;

@@ -14,3 +14,4 @@ ADMIN_PASSWORD=admin123
 MAGENTO_PUBLIC_KEY=       # repo.magento.com access keys, required only by platform "magento"
 MAGENTO_PRIVATE_KEY=
 GITHUB_TOKEN=             # github.com token for private https repositories in composer.json
+UPDATE_CHECK=1            # once a day check GitHub for a newer phpbox (0 = off)

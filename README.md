@@ -62,6 +62,7 @@ Addresses and credentials: `phpbox info <name>`.
 | `list [--size]` | Environments and their status. `--size` adds the disk usage of `boxes/<name>` (`du`, about 0.5 s per box) |
 | `info <name>` | Addresses, credentials, platform, PHP version, disk size of `boxes/<name>`, volumes with size and containers with image and state |
 | `shell <name> [service]` | Bash in the PHP container (your UID, `composer`, `wp` in PATH) or in the given service, e.g. `node` |
+| `exec <name> [--service S] <command...>` | Command in the PHP container (or service `S`) without a TTY, in `/var/www/html`. For scripts and agents, e.g. `phpbox exec shop bin/magento cache:flush` |
 | `db <name>` | MariaDB console |
 | `logs <name>` | Container logs |
 | `remove <name> [-y]` | Removes the environment with its database and files |
@@ -195,6 +196,7 @@ phpbox copy m249 m249-a
 | `ADMIN_USER`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin`, `admin@example.com`, `admin123` |
 | `MAGENTO_PUBLIC_KEY`, `MAGENTO_PRIVATE_KEY` | empty, required for `magento` |
 | `GITHUB_TOKEN` | empty, required for private `https://github.com` repositories in `composer.json` |
+| `UPDATE_CHECK` | `1`, checks `emacom/phpbox` `main` once per 24 h in the background and prints a notice when the local checkout lacks the latest commit. `0` disables it |
 
 Values are written to `boxes/<name>/.env` on `create`. Changing `phpbox.conf` later does not affect existing environments.
 

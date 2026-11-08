@@ -75,6 +75,12 @@ eq "save_env and load_env keep the values" "$(
   load_env roundtrip
   echo "$PLATFORM|$VERSION|$PHP_VERSION|$WP_VERSION|$SERVICES|$KIND"
 )" "woocommerce|10.1.0|8.3|6.8.3|redis|fresh"
+eq "exec runs the command in php without a TTY" \
+  "$(compose() { echo "$*"; }; cmd_exec roundtrip bin/magento cache:flush)" "exec -T php bin/magento cache:flush"
+eq "exec --service picks the container" \
+  "$(compose() { echo "$*"; }; cmd_exec roundtrip --service node npm -v)" "exec -T node npm -v"
+check_fails "exec without a command fails" bash -c "source '$ROOT_DIR/phpbox'; compose() { :; }; cmd_exec roundtrip"
+check_fails "exec --service without a command fails" bash -c "source '$ROOT_DIR/phpbox'; compose() { :; }; cmd_exec roundtrip --service node"
 check_fails "save_env rejects PHP without an image" bash -c "source '$ROOT_DIR/phpbox'; load_platform woocommerce; init_env php74; PHP_VERSION=7.4; save_env"
 mkdir -p "$TMP/home/.ssh" "$PHPBOX_BOXES_DIR/ssh"
 eq "write_ssh_override mounts ~/.ssh without an agent" \
@@ -139,6 +145,18 @@ for p in $(platforms); do
   )
   eq "$p defines the required variables, functions and nginx.conf" "$missing" ""
 done
+
+section "Update check"
+UPDATE_FILE="$TMP/update-check"
+git -C "$ROOT_DIR" rev-parse HEAD > "$UPDATE_FILE"
+check_fails "no notice when HEAD has the upstream commit" update_available
+printf '%040d\n' 0 | tr 0 a > "$UPDATE_FILE"
+check "notice when the upstream commit is unknown locally" update_available
+echo "<html>" > "$UPDATE_FILE"
+check_fails "no notice for an invalid cache" update_available
+: > "$UPDATE_FILE"
+check_fails "no notice for an empty cache" update_available
+eq "UPDATE_CHECK=0 prints nothing" "$(UPDATE_CHECK=0 update_notice 2>&1)" ""
 
 section "Code quality"
 for f in "$ROOT_DIR/phpbox" "$ROOT_DIR"/src/*.sh "$ROOT_DIR"/platforms/*/*.sh "$ROOT_DIR"/tests/*.sh; do

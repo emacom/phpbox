@@ -207,6 +207,15 @@ cmd_versions() { [[ -n "${1:-}" ]] || die "Usage: phpbox versions <platform> ($(
 # Open a shell in the php or the given service container: cmd_shell <name> [service]
 cmd_shell() { load_env "${1:-}"; compose exec "${2:-php}" sh -c 'command -v bash >/dev/null && exec bash || exec sh'; }
 
+# Run a command in the php or the given service container without a TTY: cmd_exec <name> [--service S] <command...>
+cmd_exec() {
+  local service=php
+  load_env "${1:-}"; shift
+  [[ "${1:-}" == --service ]] && { service="${2:-}"; shift $(($# < 2 ? $# : 2)); }
+  [[ -n "$service" && $# -gt 0 ]] || die "Usage: phpbox exec <name> [--service S] <command...>"
+  compose exec -T "$service" "$@"
+}
+
 # Open the MariaDB console of a box: cmd_db <name>
 cmd_db() { load_env "${1:-}"; compose exec db mariadb -uroot -p"$DB_ROOT_PASS" "$DB_NAME"; }
 
