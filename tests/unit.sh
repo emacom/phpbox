@@ -38,8 +38,11 @@ eq "service_default sets only a missing tag" \
   "redis:6.2-alpine node:14-alpine"
 
 section "Magento services"
-mage() { load_platform magento; SERVICES="$2"; _mage_services "$1" 4; echo "$DB_IMAGE|$SEARCH|$SERVICES|$(_mage_engine)"; }
-eq "2.4.5 uses Elasticsearch 7 and Redis 6.2" "$(mage 2.4.5 "redis")" "mariadb:10.4|elasticsearch|redis:6.2-alpine elasticsearch:7.17.25|elasticsearch7"
+mage() { load_platform magento; SERVICES="$2"; _mage_services "$1" 3; echo "$DB_IMAGE|$SEARCH|$SERVICES|$(_mage_engine)"; }
+eq "2.4.3 uses Elasticsearch 7 and Redis 6.0" "$(mage 2.4.3-p3 "redis")" "mariadb:10.4.34|elasticsearch|redis:6.0-alpine elasticsearch:7.17.25|elasticsearch7"
+check_fails "2.4.3 with OpenSearch stops" bash -c "source '$ROOT_DIR/phpbox'; load_platform magento; SERVICES=opensearch; _mage_services 2.4.3 3"
+check_fails "2.4.2 is not supported" bash -c "source '$ROOT_DIR/phpbox'; load_platform magento; _mage_services 2.4.2 3"
+eq "2.4.5 uses Elasticsearch 7 and Redis 6.2" "$(mage 2.4.5 "redis")" "mariadb:10.4.34|elasticsearch|redis:6.2-alpine elasticsearch:7.17.25|elasticsearch7"
 eq "2.4.7 uses OpenSearch 2.12 and RabbitMQ 3.13" "$(mage 2.4.7 "rabbitmq")" "mariadb:10.6|opensearch|rabbitmq:3.13-management-alpine opensearch:2.12.0|opensearch"
 eq "2.4.9 uses Valkey 9" "$(mage 2.4.9 "valkey")" "mariadb:11.4|opensearch|valkey:9.0-alpine opensearch:2.19.1|opensearch"
 eq "an explicit tag wins over the default" "$(mage 2.4.7 "redis:7.4-alpine")" "mariadb:10.6|opensearch|redis:7.4-alpine opensearch:2.12.0|opensearch"
@@ -125,7 +128,9 @@ LOCK_FW='{"packages": [{"name": "magento/framework", "version": "103.0.7-p3", "r
 eq "magento/framework 103.0.7 maps to 2.4.7" "$(versions_query lock resolve <<<"$LOCK_FW")" "103.0.7-p3 8.3 2.4.7-p3 -"
 eq "composer.json require.php" "$(versions_query project resolve <<<'{"require": {"php": ">=8.1"}}')" "8.5"
 eq "composer.json config.platform.php" "$(versions_query project resolve <<<'{"config": {"platform": {"php": "8.2.4"}}}')" "8.2"
-check_fails "composer.json for PHP 7 exits with an error" versions_query project resolve <<<'{"require": {"php": "^7.4"}}'
+eq "composer.lock of Magento 2.4.3 gives PHP 7.4" \
+  "$(versions_query lock resolve <<<'{"packages": [{"name": "magento/product-community-edition", "version": "2.4.3-p3", "require": {"php": "~7.3.0||~7.4.0"}}]}')" "2.4.3-p3 7.4 2.4.3-p3 -"
+check_fails "composer.json for PHP 7.2 exits with an error" versions_query project resolve <<<'{"require": {"php": "~7.2.0"}}'
 
 section "Composer auth (src/composer_auth.py)"
 eq "no keys and no auth.json give an empty value" "$(HOME="$TMP/empty"; composer_auth)" ""

@@ -6,7 +6,7 @@ Local PHP shops and apps on Docker, with snapshots. `create` installs the chosen
 |---|---|---|
 | `prestashop` | 8.x, 9.x | [platforms/prestashop](platforms/prestashop/README.md) |
 | `laravel` | all on Packagist, PHP 8.0+ | [platforms/laravel](platforms/laravel/README.md) |
-| `magento` | 2.4.4+ | [platforms/magento](platforms/magento/README.md) |
+| `magento` | 2.4.3+ | [platforms/magento](platforms/magento/README.md) |
 | `mageos` | 1.0+ (Magento 2.4.6+) | [platforms/mageos](platforms/mageos/README.md) |
 | `shopware` | 6.6+ | [platforms/shopware](platforms/shopware/README.md) |
 | `symfony` | all on Packagist, PHP 8.0+ | [platforms/symfony](platforms/symfony/README.md) |
@@ -19,7 +19,7 @@ Versions, installation, reset, copy and import of each platform are described in
 - Linux (x86_64 or arm64)
 - Docker with the `docker compose` plugin (v2)
 - `bash`, `curl`, `rsync`, `python3`
-- `mmilewski/php-fpm:8.0+` images on Docker Hub or locally
+- `mmilewski/php-fpm:7.3+` images on Docker Hub or locally
 - `vm.max_map_count >= 262144` for OpenSearch
 
 ## Installation
@@ -148,7 +148,7 @@ boxes/.up                # boxes running before phpbox down
 
 `phpbox-proxy`, `phpbox-mailpit` and `phpbox-phpmyadmin` form the `phpbox` compose project from `docker/shared.yml`. Code walkthrough: [docs/how-phpbox-works.md](docs/how-phpbox-works.md).
 
-PHP images cover versions 8.0–8.5.
+PHP images cover versions 7.3–8.5.
 
 ## Reset
 

@@ -47,7 +47,7 @@ p_resolve() {
 p_versions() { _sw_meta | versions_query composer list "$SW_CORE" | sed -E 's/^v//' | head -40; }
 
 p_install() {
-  php_run -e SW_PROJECT="$SW_PROJECT" -e SW_VERSION="$VERSION" -e COMPOSER_AUTH="$(composer_auth)" <<'SH'
+  php_run -e SW_PROJECT="$SW_PROJECT" -e SW_VERSION="$VERSION" -e COMPOSER_AUTH="$(composer_auth)" <<'SH' || return 1
 set -euo pipefail
 echo "→ composer create-project $SW_PROJECT:$SW_VERSION (several minutes)…"
 composer create-project --no-interaction --no-progress --no-install "$SW_PROJECT:$SW_VERSION" .

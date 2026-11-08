@@ -76,9 +76,10 @@ def expand(entries):
 
 
 def rows_prestashop(data):
-    """Rows (version, php list, base, url) from api.prestashop-project.org."""
+    """Rows (version, php list from 8.0, base, url) from api.prestashop-project.org."""
     for e in data:
-        yield e["version"], php_range(e["php_min_version"], e["php_max_version"]), e["version"], e["zip_download_url"]
+        lo = max(e["php_min_version"], "8.0", key=minor)
+        yield e["version"], php_range(lo, e["php_max_version"]), e["version"], e["zip_download_url"]
 
 
 def rows_composer(data, package):

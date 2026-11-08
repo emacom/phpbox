@@ -55,7 +55,8 @@ _mage_services() {
   [[ "$base" == 2.4.* && "$patch" =~ ^[0-9]+$ ]] || die "Unsupported Magento version: $base"
   (( patch >= min )) || die "Magento $base is not supported (minimum 2.4.$min)"
   case "$patch" in
-    4|5) DB_IMAGE="mariadb:10.4"; SEARCH=elasticsearch; es=7.17.25; os=1.2.4; redis=6.2; rabbitmq=3.9 ;;
+    3)   DB_IMAGE="mariadb:10.4.34"; SEARCH=elasticsearch; es=7.17.25; redis=6.0; rabbitmq=3.8 ;;
+    4|5) DB_IMAGE="mariadb:10.4.34"; SEARCH=elasticsearch; es=7.17.25; os=1.2.4; redis=6.2; rabbitmq=3.9 ;;
     6)   DB_IMAGE="mariadb:10.6"; SEARCH=opensearch; es=7.17.25; os=2.12.0; redis=7.0; rabbitmq=3.11 ;;
     7)   DB_IMAGE="mariadb:10.6"; SEARCH=opensearch; es=8.11.4; os=2.12.0; redis=7.2; rabbitmq=3.13 ;;
     8)   DB_IMAGE="mariadb:11.4"; SEARCH=opensearch; es=8.17.10; os=2.19.1; redis=7.2; valkey=8.1; rabbitmq=4.1 ;;
@@ -63,9 +64,10 @@ _mage_services() {
   esac
   has_service opensearch && SEARCH=opensearch
   has_service elasticsearch && SEARCH=elasticsearch
+  [[ -n "$os" || "$SEARCH" != opensearch ]] || die "Magento $base has no OpenSearch engine; use --elasticsearch"
   add_service "$SEARCH"
   [[ -n "$es" ]] && service_default elasticsearch "$es"
-  service_default opensearch "$os"
+  [[ -n "$os" ]] && service_default opensearch "$os"
   [[ -n "$redis" ]] && service_default redis "$redis-alpine"
   [[ -n "$valkey" ]] && service_default valkey "$valkey-alpine"
   service_default rabbitmq "$rabbitmq-management-alpine"
@@ -83,7 +85,7 @@ p_resolve() {
   out=$(_mage_meta | versions_query composer resolve "$M_PRODUCT" "$1") \
     || die "Version '$1' not found (phpbox versions $PLATFORM)"
   read -r VERSION PHP_VERSION MAGE_BASE DOWNLOAD_URL <<<"$out"
-  _mage_services "$MAGE_BASE" 4
+  _mage_services "$MAGE_BASE" 3
 }
 
 p_versions() { _mage_check_auth; _mage_meta | versions_query composer list "$M_PRODUCT"; }
@@ -123,7 +125,7 @@ SH
   } | COMPOSER_AUTH="$(composer_auth)" php_run -e COMPOSER_AUTH \
     -e M_REPO="$M_REPO" -e M_PROJECT="$M_PROJECT" -e M_VERSION="$VERSION" -e M_URL="$(shop_url)/" \
     -e M_LOCALE="$(shop_locale)" -e M_CURRENCY="$SHOP_CURRENCY" -e M_TZ="$SHOP_TZ" -e M_COUNTRY="${SHOP_COUNTRY^^}" \
-    -e M_ADMIN="$P_ADMIN_PATH" -e M_SEARCH="$(_mage_engine)"
+    -e M_ADMIN="$P_ADMIN_PATH" -e M_SEARCH="$(_mage_engine)" || return 1
   compose exec -T web nginx -s reload
 }
 
@@ -135,7 +137,7 @@ p_clone_detect() {
   (( rc == 2 )) && die "composer.lock requires PHP outside $PHP_IMAGE images ($PHP_VERSIONS); force --php"
   (( rc == 0 )) || die "Magento version not detected in composer.lock"
   read -r VERSION PHP_VERSION MAGE_BASE DOWNLOAD_URL <<<"$out"
-  _mage_services "$MAGE_BASE" 4
+  _mage_services "$MAGE_BASE" 3
 }
 
 p_project_install() {

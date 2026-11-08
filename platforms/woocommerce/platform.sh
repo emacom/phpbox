@@ -46,7 +46,7 @@ p_versions() { curl -fsSL "$WC_API" | versions_query woocommerce list | head -40
 p_install() {
   php_run \
     -e WP_VERSION="$WP_VERSION" -e WC_VERSION="$VERSION" -e WP_URL="$(shop_url)" \
-    -e WP_LOCALE="$(shop_locale)" -e WC_COUNTRY="${SHOP_COUNTRY^^}" -e WC_CURRENCY="$SHOP_CURRENCY" -e WP_TZ="$SHOP_TZ" <<'SH'
+    -e WP_LOCALE="$(shop_locale)" -e WC_COUNTRY="${SHOP_COUNTRY^^}" -e WC_CURRENCY="$SHOP_CURRENCY" -e WP_TZ="$SHOP_TZ" <<'SH' || return 1
 set -euo pipefail
 echo "→ WordPress $WP_VERSION ($WP_LOCALE)…"
 wp core download --version="$WP_VERSION" --locale="$WP_LOCALE"

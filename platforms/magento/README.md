@@ -13,8 +13,9 @@ The version list from `repo.magento.com` comes from the Composer v1 format (`pro
 
 | Magento | `create` | `clone` | PHP | MariaDB | Search engine |
 |---|---|---|---|---|---|
-| 2.4.4 | yes | yes | 8.1 | 10.4 | Elasticsearch 7.17.25 |
-| 2.4.5 | yes | yes | 8.1 | 10.4 | Elasticsearch 7.17.25 |
+| 2.4.3 | yes | yes | 7.3–7.4 | 10.4.34 | Elasticsearch 7.17.25 |
+| 2.4.4 | yes | yes | 7.4–8.1 | 10.4.34 | Elasticsearch 7.17.25 |
+| 2.4.5 | yes | yes | 8.1 | 10.4.34 | Elasticsearch 7.17.25 |
 | 2.4.6 | yes | yes | 8.1–8.2 | 10.6 | OpenSearch 2.12.0 |
 | 2.4.7 | yes | yes | 8.1–8.3 | 10.6 | OpenSearch 2.12.0 |
 | 2.4.8 | yes | yes | 8.2–8.4 | 11.4 | OpenSearch 2.19.1 |
@@ -28,6 +29,7 @@ The search engine is selected by `_mage_services` from the Magento version and a
 
 | Magento | Elasticsearch | OpenSearch | Redis | Valkey | RabbitMQ |
 |---|---|---|---|---|---|
+| 2.4.3 | 7.17.25 | none, `--opensearch` stops | 6.0-alpine | service default | 3.8-management-alpine |
 | 2.4.4, 2.4.5 | 7.17.25 | 1.2.4 | 6.2-alpine | service default | 3.9-management-alpine |
 | 2.4.6 | 7.17.25 | 2.12.0 | 7.0-alpine | service default | 3.11-management-alpine |
 | 2.4.7 | 8.11.4 | 2.12.0 | 7.2-alpine | service default | 3.13-management-alpine |
