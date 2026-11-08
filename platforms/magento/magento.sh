@@ -96,7 +96,13 @@ p_install() {
     cat <<'SH'
 set -euo pipefail
 echo "→ composer create-project $M_PROJECT=$M_VERSION (several minutes)…"
-composer create-project --no-interaction --no-progress --repository-url="$M_REPO" "$M_PROJECT=$M_VERSION" .
+composer create-project --no-interaction --no-progress --no-install --repository-url="$M_REPO" "$M_PROJECT=$M_VERSION" .
+if ! php -r 'exit(isset(json_decode(file_get_contents("composer.json"), true)["config"]["allow-plugins"]) ? 0 : 1);'; then
+  for plugin in 'magento/*' laminas/laminas-dependency-plugin dealerdirect/phpcodesniffer-composer-installer; do
+    composer config --no-plugins "allow-plugins.$plugin" true
+  done
+fi
+composer install --no-interaction --no-progress
 SH
     cat "$M_DIR/icu-patch.sh"
     cat <<'SH'
