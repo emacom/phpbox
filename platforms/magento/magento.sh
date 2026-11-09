@@ -243,7 +243,7 @@ php -r '$f = "app/etc/env.php"; $c = include $f; $c["install"]["date"] ??= date(
 SH
     cat "$M_DIR/icu-patch.sh"
     cat <<'SH'
-bin/magento setup:upgrade
+bin/magento setup:upgrade -n
 bin/magento admin:user:create --admin-user="$ADMIN_USER" --admin-password="$ADMIN_PASSWORD" \
   --admin-email="$ADMIN_EMAIL" --admin-firstname=Admin --admin-lastname=PhpBox \
   || echo "User $ADMIN_USER / $ADMIN_EMAIL already exists; log in with the imported account or run: bin/magento admin:user:unlock"
