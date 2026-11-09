@@ -131,6 +131,12 @@ eq "composer.json config.platform.php" "$(versions_query project resolve <<<'{"c
 eq "composer.lock of Magento 2.4.3 gives PHP 7.4" \
   "$(versions_query lock resolve <<<'{"packages": [{"name": "magento/product-community-edition", "version": "2.4.3-p3", "require": {"php": "~7.3.0||~7.4.0"}}]}')" "2.4.3-p3 7.4 2.4.3-p3 -"
 check_fails "composer.json for PHP 7.2 exits with an error" versions_query project resolve <<<'{"require": {"php": "~7.2.0"}}'
+mkdir -p "$TMP/lock"
+eq "composer.lock from Composer 2.2 selects composer-2.2" \
+  "$(WWW_DIR="$TMP/lock"; echo '{"plugin-api-version": "2.2.0"}' > "$WWW_DIR/composer.lock"; composer_detect; echo "$COMPOSER_PHAR")" "composer-2.2"
+eq "composer.lock from Composer 2.6 keeps the latest composer" \
+  "$(WWW_DIR="$TMP/lock"; echo '{"plugin-api-version": "2.6.0"}' > "$WWW_DIR/composer.lock"; composer_detect; echo "$COMPOSER_PHAR")" ""
+eq "no composer.lock keeps the latest composer" "$(WWW_DIR="$TMP/none"; composer_detect; echo "$COMPOSER_PHAR")" ""
 
 section "Composer auth (src/composer_auth.py)"
 eq "no keys and no auth.json give an empty value" "$(HOME="$TMP/empty"; composer_auth)" ""

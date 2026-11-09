@@ -77,11 +77,12 @@ download() {
   curl -fsSL -o "$1.part" "$2" && chmod +x "$1.part" && mv "$1.part" "$1"
 }
 
-# Put composer, wp-cli, mailpit and mkcert into cache/bin and prepare the CA.
+# Put composer (2.2 LTS when COMPOSER_PHAR asks for it), wp-cli, mailpit and mkcert into cache/bin and prepare the CA.
 ensure_tools() {
   local cid
   mkdir -p "$BIN_DIR" "$CACHE_DIR/composer" "$CACHE_DIR/wp-cli"
   download "$BIN_DIR/composer" https://getcomposer.org/download/latest-stable/composer.phar
+  [[ "${COMPOSER_PHAR:-}" == composer-2.2 ]] && download "$BIN_DIR/composer-2.2" https://getcomposer.org/download/latest-2.2.x/composer.phar
   download "$BIN_DIR/wp" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
   if [[ ! -x "$BIN_DIR/mailpit" ]]; then
     log "Downloading mailpit…"

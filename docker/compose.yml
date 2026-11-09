@@ -31,6 +31,7 @@ services:
       - ${WWW_DIR}:/var/www/html
       - ${CACHE_DIR}:/cache
       - ${CACHE_DIR}/bin:/opt/phpbox/bin:ro
+      - ${CACHE_DIR}/bin/${COMPOSER_PHAR:-composer}:/opt/phpbox/bin/composer:ro
       - ./php.ini:/usr/local/etc/php/conf.d/zz-phpbox.ini:ro
       - /etc/passwd:/etc/passwd:ro
       - /etc/group:/etc/group:ro

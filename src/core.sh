@@ -123,7 +123,7 @@ save_env() {
   local k
   [[ -n "$OPT_PHP" ]] && PHP_VERSION="$OPT_PHP"
   [[ " $PHP_VERSIONS " == *" $PHP_VERSION "* ]] || die "No image $PHP_IMAGE:$PHP_VERSION (available: $PHP_VERSIONS)"
-  ok "$P_TITLE $VERSION (PHP $PHP_VERSION, $DB_IMAGE${SERVICES:+, $SERVICES})"
+  ok "$P_TITLE $VERSION (PHP $PHP_VERSION, $DB_IMAGE${SERVICES:+, $SERVICES}${COMPOSER_PHAR:+, $COMPOSER_PHAR})"
   mkdir -p "$BOXES_DIR/$NAME"
   for k in $ENV_KEYS $P_ENV_KEYS; do printf '%s=%q\n' "$k" "${!k:-}"; done > "$ENV_FILE"
 }
@@ -180,6 +180,18 @@ p_clone_detect() {
     fi
   fi
   DB_IMAGE="mariadb:11.4"
+}
+
+# Set COMPOSER_PHAR to composer-2.2 when composer.lock was written by Composer older than 2.3.
+composer_detect() {
+  local api
+  COMPOSER_PHAR=""
+  [[ -f "$WWW_DIR/composer.lock" ]] || return 0
+  api=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("plugin-api-version", ""))' "$WWW_DIR/composer.lock")
+  if [[ "$api" =~ ^([0-9]+)\.([0-9]+) ]] && (( BASH_REMATCH[1] < 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] < 3) )); then
+    COMPOSER_PHAR=composer-2.2
+  fi
+  return 0
 }
 
 # Run composer install when composer.json exists; default clone hook.

@@ -36,6 +36,7 @@ cmd_clone() {
   mkdir -p "$BOXES_DIR/$NAME"
   git clone ${OPT_BRANCH:+--branch "$OPT_BRANCH"} "$repo" "$WWW_DIR" || { rm -rf "${BOXES_DIR:?}/$NAME"; die "git clone failed"; }
   p_clone_detect
+  composer_detect
   save_env
   write_ssh_override
 

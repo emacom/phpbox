@@ -56,7 +56,7 @@
 
 | Step | Function | Effect |
 |---|---|---|
-| 1 | `ensure_tools` | `cache/bin/{composer,wp,mailpit}`, mkcert, CA, `cache/certs/ca-bundle.pem`, certificates for `SHARED_HOSTS` |
+| 1 | `ensure_tools` | `cache/bin/{composer,wp,mailpit}`, `cache/bin/composer-2.2` for `COMPOSER_PHAR=composer-2.2`, mkcert, CA, `cache/certs/ca-bundle.pem`, certificates for `SHARED_HOSTS` |
 | 2 | `ensure_cert` | `cache/certs/<name>.pem` |
 | 3 | `shared_up` | `docker compose -p phpbox -f docker/shared.yml up -d` |
 | 4 | `compose up -d --wait` | Box containers from the files listed in "Box compose files" |
