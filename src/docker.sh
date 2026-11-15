@@ -1,12 +1,13 @@
 # shellcheck shell=bash disable=SC2034
 
-# Run docker compose for the loaded box with its platform overlays, services, image tags and variables: compose <args...>
+# Run docker compose for the loaded box with its platform overlays, services, box overrides (compose.yml, compose.*.yml), image tags and variables: compose <args...>
 compose() {
   local files=(-f "$ROOT/docker/compose.yml") f s tags
   for f in "${P_COMPOSE[@]}"; do files+=(-f "$f"); done
   for s in $SERVICES; do files+=(-f "$ROOT/docker/services/${s%%:*}.yml"); done
   mapfile -t tags < <(service_tags)
   [[ -f "$BOXES_DIR/$NAME/compose.yml" ]] && files+=(-f "$BOXES_DIR/$NAME/compose.yml")
+  for f in "$BOXES_DIR/$NAME"/compose.*.yml; do [[ -f "$f" ]] && files+=(-f "$f"); done
   mkdir -p "$BOXES_DIR/$NAME/nginx"
   ENV_DIR="$BOXES_DIR/$NAME" WWW_DIR="$WWW_DIR" CACHE_DIR="$CACHE_DIR" NGINX_CONF="$P_NGINX_CONF" \
   HTTP_PORT="$HTTP_PORT" HTTPS_PORT="$HTTPS_PORT" RABBITMQ_PORT=$((PORT + 20000)) \
