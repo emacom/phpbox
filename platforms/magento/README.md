@@ -67,4 +67,24 @@ phpbox db-import shop ~/dumps/shop.sql.gz
 | Cache | Built-in FPC without Redis. `cache:enable` turns on all types, because `setup:config:set` does not create the `cache_types` section |
 | Magento | `setup:upgrade`, developer mode, `admin:user:create` from `phpbox.conf`, reindex |
 
-A service added to `SERVICES` after `db-import` needs `bin/magento setup:config:set` with the same parameters as `magento.sh` (`--session-save`, `--cache-backend`, `--page-cache`, `--amqp-*`).
+### Services after import
+
+`phpbox service add|remove <name> <service>` updates `app/etc/env.php` through `p_service_changed`.
+
+| Service | Change |
+|---|---|
+| `redis`, `valkey` | Session, cache and FPC in the service, or back to files and the built-in cache after removal |
+| `rabbitmq` | `queue.amqp` to `rabbitmq`, removed after removal |
+| `varnish` | `caching_application` = Varnish, backend `web:8080`, `http_cache_hosts` = `varnish:80`. The VCL from `varnish:vcl:generate` goes to `boxes/<name>/varnish.vcl` with a purge ACL for private networks. `--access-list` and `--grace-period` are passed explicitly and `&#123;`/`&#125;` are decoded, because the Mage-OS generator (`elgentos/magento2-varnish-extended`) needs both options and escapes a brace. Removal: built-in cache, VCL deleted |
+
+`db-import` applies the same settings when the service is already in `SERVICES`.
+
+### Strip groups
+
+| Group | Tables |
+|---|---|
+| `@log` | `customer_log`, `customer_visitor`, `report_compared_product_index`, `report_event`, `report_viewed_product_index` |
+| `@sessions` | `session` |
+| `@quotes` | `quote`, `quote_*` |
+
+Group tables have no prefix. A database with a table prefix needs the full names, e.g. `--strip "m2_session"`.

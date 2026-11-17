@@ -1,0 +1,9 @@
+services:
+  php:
+    image: ${XDEBUG_IMAGE:-mmilewski/php-fpm-xdebug}:${PHP_VERSION}
+    environment:
+      XDEBUG_MODE: ${XDEBUG_MODE:-debug}
+      XDEBUG_CONFIG: client_host=host.docker.internal client_port=${XDEBUG_PORT:-9003} start_with_request=trigger
+      PHP_IDE_CONFIG: serverName=${NAME}
+    extra_hosts:
+      - host.docker.internal:host-gateway

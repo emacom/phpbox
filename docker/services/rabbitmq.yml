@@ -4,7 +4,7 @@ services:
     ports:
       - "127.0.0.1:${RABBITMQ_PORT}:15672"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 5s
       timeout: 10s
       retries: 30

@@ -53,14 +53,17 @@ Addresses and credentials: `phpbox info <name>`.
 |---|---|
 | `create <platform> <version> [options]` | Installation. Version: full, prefix (`8.2`, `9`) or `latest` |
 | `clone <platform> <git-repo> [options]` | Project from a repository: `git clone` + `composer install`, no database |
+| `add <platform> <path> [options]` | Existing project directory as a box, without copying it. Options as in `clone`, without `--branch`. See "Existing project directory" |
 | `copy <source> <name>` | Copy of an environment with its current database, new host and database port |
-| `db-import <name> <dump>` | Database import and configuration for the local environment, then snapshot |
+| `db-import <name> <dump> [--strip "<list>"]` | Database import and configuration for the local environment, then snapshot. `--strip`: tables imported empty, see "Import without some tables" |
 | `reset <name> [--db-only]` | Restores the database (and files) to the snapshot. Project from `clone`: database only |
 | `snapshot <name>` | The current state becomes the new reset point |
 | `start` / `stop <name>` | Start / stop |
+| `service add\|remove <name> <service[:tag]>` | Adds or removes a service, recreates the containers and lets the platform update its configuration (Magento `env.php`) |
 | `up` / `down` | Start / stop the whole phpbox. `down` frees the ports and remembers running environments, `up` resumes them |
-| `list [--size]` | Environments and their status. `--size` adds the disk usage of `boxes/<name>` (`du`, about 0.5 s per box) |
-| `info <name>` | Addresses, credentials, platform, PHP version, disk size of `boxes/<name>`, volumes with size and containers with image and state |
+| `list [--size] [--json]` | Environments and their status. `--size` adds the disk usage of `boxes/<name>` (`du`, about 0.5 s per box). `--json`: see "Public interface" |
+| `info <name> [--json]` | Addresses, credentials, platform, PHP version, disk size of `boxes/<name>`, volumes with size and containers with image and state |
+| `capabilities` | Features of this phpbox as JSON, for scripts and plugins |
 | `shell <name> [service]` | Bash in the PHP container (your UID, `composer`, `wp` in PATH) or in the given service, e.g. `node` |
 | `exec <name> [--service S] <command...>` | Command in the PHP container (or service `S`) without a TTY, in `/var/www/html`. For scripts and agents, e.g. `phpbox exec shop bin/magento cache:flush` |
 | `db <name>` | MariaDB console |
@@ -97,16 +100,29 @@ SERVICES='opensearch:2.19.1 redis:7.4-alpine node:14-alpine'
 | `memcached` | `memcached:${MEMCACHED_TAG:-1.6-alpine}` | `memcached` | 256 MB |
 | `cron` | image and volumes of the `php` service (`extends`) | — | Runs the platform `P_CRON` every 60 s |
 | `node` | `node:${NODE_TAG:-22-alpine}` | — | Tool container with the box code and the host UID. Entry: `phpbox shell <name> node` |
+| `varnish` | `varnish:${VARNISH_TAG:-7.6-alpine}` | `varnish` | HTTP cache between the proxy and the platform. See "Varnish" |
+| `xdebug` | `mmilewski/php-fpm-xdebug:<PHP_VERSION>` in place of the `php` image | — | Xdebug 3, `XDEBUG_MODE=debug`, `start_with_request=trigger`, client `host.docker.internal:9003`, `PHP_IDE_CONFIG=serverName=<name>`. Remove the service to get the plain image back |
+| `playwright` | `mcr.microsoft.com/playwright:${PLAYWRIGHT_TAG:-v1.49.1-noble}` | — | Browser tests in the network of `php`, `PLAYWRIGHT_BASE_URL` = box address. The tag must match the `@playwright/test` version of the project. Entry: `phpbox exec <name> --service playwright npx playwright test` |
 
 | Situation | Action |
 |---|---|
 | `--<service>[:tag]` flag on `create` or `clone` | The service is added to `SERVICES`. A later tag of the same service replaces the earlier one |
-| Service added later | Append it to `SERVICES` in `.env` and run `phpbox start <name>`. Platform configuration (e.g. Magento `env.php`) is not updated |
+| Service added later | `phpbox service add <name> <service[:tag]>`: `SERVICES` saved, containers recreated, platform `p_service_changed` and the `post-service-change` hook run |
+| Service removed | `phpbox service remove <name> <service>`. The search engine from `SEARCH` stays |
 | `SEARCH` in `.env` | `load_env` adds its value to the services |
 | Tag changed later | Edit the tag in `SERVICES` and run `phpbox start <name>`. A downgrade does not start on the existing volume |
 | New service | A `docker/services/<name>.yml` file with `image: <image>:${<NAME>_TAG:-<default>}`. The `--<name>` flag works immediately |
 
-`compose()` in `src/docker.sh` merges the files in this order: `docker/compose.yml`, platform `P_COMPOSE`, one file per entry in `SERVICES`, `boxes/<name>/compose.yml`.
+`compose()` in `src/docker.sh` merges the files in this order: `docker/compose.yml`, platform `P_COMPOSE`, one file per entry in `SERVICES`, `<code>/.phpbox/compose.yml` and `compose.*.yml`, `boxes/<name>/compose.yml` and `compose.*.yml`.
+
+### Varnish
+
+| Request | Path |
+|---|---|
+| Browser | `phpbox-proxy` → `web:80` → `varnish:80` → `web:8080` → `php` |
+| Without the service | `phpbox-proxy` → `web:80` → `php` |
+
+`docker/nginx/varnish.server.conf` is mounted in `web` only with the service: it adds `listen 8080` and sends requests on port 80 to Varnish. The VCL is `boxes/<name>/varnish.vcl` when it exists, otherwise `docker/varnish/default.vcl` (backend `web:8080`). Magento writes its own VCL, see the platform README.
 
 Without disabled disk watermarks, OpenSearch 2.x sets a persistent `cluster.blocks.create_index` block above 95% disk usage and reindexing fails with 403. The search index is not part of the snapshot.
 
@@ -118,7 +134,8 @@ src/core.sh              # messages, options, platform and .env loading, ports, 
 src/docker.sh            # box compose, shared containers, box_up / box_down, tools
 src/tls.sh               # mkcert, CA, box certificates
 src/database.sh          # queries, dump, import, snapshot
-src/commands.sh          # cmd_* in workflow order: create, clone, db-import, copy, reset…
+src/commands.sh          # cmd_* in workflow order: create, clone, add, db-import, copy, reset, service…
+src/strip-tables.awk     # db-import --strip: drops INSERT statements of the listed tables
 src/composer_auth.py     # COMPOSER_AUTH from the host auth.json and keys from phpbox.conf
 src/versions.py          # version and PHP selection from platform APIs
 docker/shared.yml        # compose project "phpbox": proxy, Mailpit, phpMyAdmin, phpbox network
@@ -127,6 +144,8 @@ docker/php.ini           # memory 2G, sendmail → Mailpit, date.timezone = SHOP
 docker/proxy.conf        # phpbox-proxy: <name>.localhost → box web, phpmyadmin/mailpit.localhost
 docker/phpmyadmin.php    # phpMyAdmin server list from boxes/*/.env
 docker/services/<service>.yml  # see "Services"
+docker/nginx/            # nginx files mounted by services, e.g. varnish.server.conf
+docker/varnish/default.vcl     # VCL of the varnish service without a box VCL
 platforms/<p>/           # platform.sh, nginx.conf, README.md
 docs/                    # how phpbox works, adding a platform
 tests/                   # tests: tests/run.sh
@@ -182,6 +201,76 @@ phpbox copy m249 m249-a
 | Files | `rsync` of the box code without paths from `p_snapshot_excludes` |
 | Addresses | Platform `p_rehost <old-url>` |
 | Snapshot | New, with the state after the copy |
+
+## Existing project directory
+
+`add` creates a box for code that already lives elsewhere, e.g. in an IDE project folder. The path goes to `CODE_DIR` in `.env` and is mounted at `/var/www/html`.
+
+```bash
+phpbox add magento ~/projects/shop --name shop --redis --rabbitmq
+phpbox db-import shop ~/dumps/shop.sql.gz --strip "@log @sessions"
+```
+
+| Topic | Behaviour |
+|---|---|
+| Kind | `project`, like `clone`: `reset` restores the database only |
+| Dependencies | `composer install` only when `vendor/` is missing |
+| `remove` | Removes the box, the database and `boxes/<name>`. The code directory stays |
+| One directory | A directory already used by another box is refused |
+
+## Project configuration (`.phpbox/`)
+
+A project can keep its box settings in git, in `.phpbox/` of the code directory. Every file is optional and box files in `boxes/<name>/` are applied after them.
+
+| File | Use |
+|---|---|
+| `.phpbox/compose.yml`, `.phpbox/compose.*.yml` | Extra services or overrides of the box compose project. Relative paths resolve against `docker/`, use `${WWW_DIR}` for project files |
+| `.phpbox/nginx/*.server.conf` | Included in the `server` block of the platform `nginx.conf`, e.g. redirects or extra locations |
+| `.phpbox/nginx/*.http.conf` | Included before the `server` block, e.g. `map` |
+| `.phpbox/hooks/<event>` | Hook script, see "Hooks" |
+
+`boxes/<name>/nginx/*.server.conf` and `*.http.conf` work the same way for one box.
+
+## Hooks
+
+A hook is a bash script `.phpbox/hooks/<event>` in the code directory or `boxes/<name>/hooks/<event>`. Both run when present, project first. They run in the `php` container in `/var/www/html` with the host UID, like `phpbox exec`. A failing hook stops the command.
+
+| Event | After |
+|---|---|
+| `post-start` | `start`, `up` and `add` started the box |
+| `post-import` | `db-import` configured the database, before the snapshot |
+| `post-service-change` | `service add` or `service remove` and the platform `p_service_changed` |
+
+| Variable | Value |
+|---|---|
+| `PHPBOX_EVENT`, `PHPBOX_NAME` | Event and box name |
+| `SHOP_URL` | Box address |
+| `SERVICES` | Service names, without tags |
+| `PHPBOX_ACTION`, `PHPBOX_SERVICE` | `post-service-change` only: `add` or `remove` and the service |
+| `DB_NAME`, `DB_USER`, `DB_PASS` | Database of the `db` host |
+
+## Import without some tables
+
+`--strip` lists tables whose rows are skipped, so they are created empty. `*` is a wildcard and `@<group>` is a group of the platform, e.g. `@log` for Magento. `DB_STRIP` in `.env` is the default list, `--strip ""` imports everything.
+
+```bash
+phpbox db-import shop dump.sql.gz --strip "@log @sessions report_*"
+```
+
+The filter in `src/strip-tables.awk` reads the decompressed stream and handles single-line and multi-line `INSERT` statements.
+
+## Public interface
+
+Scripts and plugins may rely on the items below. A change to any of them is a breaking change.
+
+| Item | Contract |
+|---|---|
+| `phpbox list --json` | Array of the objects from `info --json`, without `containers` |
+| `phpbox info <name> --json` | `name`, `platform`, `title`, `version`, `kind`, `php`, `status` (`running`/`stopped`), `url`, `admin` (`url`, `user`, `password`, or `null`), `code_dir`, `external_code`, `box_dir`, `services` (`name`, `tag`), `database` (`host`, `port`, `name`, `user`, `password`, `root_password`, `image`), optional `stores` (`type`, `code`, `url`), `containers` (`service`, `name`, `image`, `state`) |
+| `phpbox capabilities` | `{"capabilities": [...]}`. Check a feature here instead of comparing versions |
+| `phpbox exec <name> [--service S] <command...>` | Command in the box without a TTY, in `/var/www/html` |
+| Files | `.phpbox/` and `boxes/<name>/` files from "Project configuration", hooks from "Hooks", `boxes/<name>/varnish.vcl` |
+| Containers | Compose project `phpbox-<name>`, containers `phpbox-<name>-<service>-1`, network `phpbox-<name>_default` |
 
 ## Configuration
 

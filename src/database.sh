@@ -33,6 +33,28 @@ dump_fix() {
     -e '/^SET @@GLOBAL.GTID_PURGED/,/;$/d'
 }
 
+# Print the comma-separated table patterns of a strip list; @<group> entries come from the platform p_strip_group: strip_patterns <list>
+strip_patterns() {
+  local items e t out=()
+  read -r -a items <<<"$1"
+  for e in "${items[@]}"; do
+    if [[ "$e" == @* ]]; then
+      t=$(declare -F p_strip_group >/dev/null && p_strip_group "${e#@}") || die "Unknown strip group '$e' for $P_TITLE"
+      read -r -a t <<<"$t"
+      out+=("${t[@]}")
+    else
+      out+=("$e")
+    fi
+  done
+  (IFS=,; echo "${out[*]}")
+}
+
+# Drop the INSERT statements of the tables matching comma-separated patterns from a dump on stdin: dump_strip <patterns>
+dump_strip() {
+  if [[ -z "$1" ]]; then cat; return; fi
+  awk -v patterns="$1" -f "$ROOT/src/strip-tables.awk"
+}
+
 # Print rsync --exclude options for the platform paths left out of snapshots.
 snapshot_excludes() { local e; for e in $(p_snapshot_excludes); do printf -- '--exclude=/%s ' "$e"; done; }
 

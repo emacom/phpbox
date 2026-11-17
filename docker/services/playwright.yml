@@ -1,0 +1,19 @@
+services:
+  playwright:
+    image: mcr.microsoft.com/playwright:${PLAYWRIGHT_TAG:-v1.49.1-noble}
+    user: "${HOST_UID}:${HOST_GID}"
+    network_mode: service:php
+    working_dir: /var/www/html
+    command: ["sleep", "infinity"]
+    init: true
+    environment:
+      HOME: /tmp
+      npm_config_cache: /cache/npm
+      PLAYWRIGHT_BASE_URL: https://${SHOP_HOST}:${HTTPS_PORT}
+    volumes:
+      - ${WWW_DIR}:/var/www/html
+      - ${CACHE_DIR}:/cache
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+    depends_on:
+      - php

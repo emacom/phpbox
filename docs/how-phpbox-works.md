@@ -8,9 +8,10 @@
 |---|---|
 | `phpbox` | Defaults, `SHARED_HOSTS`, `phpbox.conf`, `usage`, command dispatch |
 | `src/core.sh` | `log`/`ok`/`die`, `parse_options`, `load_platform`, `load_env`, `init_env`, `save_env`, ports, `shop_url`, default `p_clone_detect`/`p_project_install`/`p_after_import` |
-| `src/docker.sh` | `compose`, `php_run`, `shared`, `box_up`, `box_down`, `download`, `ensure_tools` |
+| `src/docker.sh` | `compose`, `php_run`, `run_hooks`, `shared`, `box_up`, `box_down`, `download`, `ensure_tools` |
 | `src/tls.sh` | `ensure_ca`, `ensure_cert`, `issue_cert` |
-| `src/database.sh` | `db_exec`, `db_load`, `db_dump`, `dump_fix`, `take_snapshot` |
+| `src/database.sh` | `db_exec`, `db_load`, `db_dump`, `dump_fix`, `strip_patterns`, `dump_strip`, `take_snapshot` |
+| `src/strip-tables.awk` | Stream filter of `dump_strip` |
 | `src/commands.sh` | `cmd_*` in workflow order, `print_info` |
 | `platforms/<p>/platform.sh` | Platform `p_*` functions, described in [adding-a-platform.md](adding-a-platform.md) |
 
@@ -32,9 +33,11 @@
 |---|---|
 | `NAME`, `PORT`, `DB_PORT`, `DB_NAME`, `SHOP_HOST` | `init_env` on creation, then `.env` |
 | `VERSION`, `PHP_VERSION`, `DB_IMAGE` | `p_resolve` on `create`, `p_clone_detect` on `clone` |
-| `KIND` | `fresh` for `create`, `project` for `clone` |
+| `KIND` | `fresh` for `create`, `project` for `clone` and `add` |
+| `CODE_DIR` | Code directory of `add`, empty otherwise |
+| `DB_STRIP` | Default `--strip` list of `db-import`, empty by default |
 | `SERVICES` | `--<service>[:tag]` flags and services added by the platform in `p_resolve`/`p_clone_detect`, e.g. the Magento search engine. Entries are `<name>` or `<name>:<tag>` |
-| `WWW_DIR`, `ENV_FILE` | `boxes/<name>/<name>` (`boxes/<name>/www` when it exists), `boxes/<name>/.env` |
+| `WWW_DIR`, `ENV_FILE` | `CODE_DIR` when set, otherwise `boxes/<name>/<name>` (`boxes/<name>/www` when it exists), `boxes/<name>/.env` |
 
 `save_env` writes the variables listed in `ENV_KEYS` and the platform `P_ENV_KEYS`. There is no template `.env` file.
 
@@ -44,11 +47,13 @@
 |---|---|
 | `create` | `load_platform` → `parse_options` → `p_resolve` → `init_env` → `save_env` → `box_up` → `p_install` → `take_snapshot` → `print_info` |
 | `clone` | `load_platform` → `parse_options` → `init_env` → `git clone` → `p_clone_detect` → `save_env` → `write_ssh_override` → `box_up` → `p_project_install` |
-| `db-import` | `load_env` → `box_up` → `dump_decompress` + `dump_fix` + `db_load` → `p_after_import` → `take_snapshot` |
+| `add` | `load_platform` → `parse_options` → `init_env` with `CODE_DIR` → `p_clone_detect` → `save_env` → `write_ssh_override` → `box_up` → `p_project_install` without `vendor/` → `run_hooks post-start` |
+| `db-import` | `load_env` → `strip_patterns` → `box_up` → `dump_decompress` + `dump_fix` + `dump_strip` + `db_load` → `p_after_import` → `run_hooks post-import` → `take_snapshot` |
+| `service` | `load_env` → `add_service` / `remove_service` → `save_env` → `box_up --remove-orphans` → `p_service_changed` → `run_hooks post-service-change` |
 | `copy` | `load_env` of the source → `box_up` → `db_dump` → `init_env` of the target → `rsync` of the source `WWW_DIR` → `save_env` → `box_up` → `db_load` → `p_rehost` → `take_snapshot` |
 | `reset` | `load_env` → `box_up` → `db_load` from the snapshot → `rsync` of files, except `project` → `p_clear_cache` |
-| `start` / `stop` | `load_env` → `box_up` / `box_down` |
-| `up` | `ensure_tools` → `shared_up` → `box_up` of every box from `boxes/.up` |
+| `start` / `stop` | `load_env` → `box_up` → `run_hooks post-start` / `box_down` |
+| `up` | `ensure_tools` → `shared_up` → `box_up` and `run_hooks post-start` of every box from `boxes/.up` |
 | `down` | `box_down` of every box with containers → running ones saved to `boxes/.up` → `shared down` |
 | `remove` | `load_env` → `compose down -v` → removal of `boxes/<name>` and the certificate |
 
@@ -73,6 +78,7 @@
 | 1 | `docker/compose.yml` | Always: `web`, `php`, `db`, `loopback` |
 | 2 | Platform overlays | `P_COMPOSE` |
 | 3 | `docker/services/<service>.yml` | One per entry in `SERVICES`, tag removed |
-| 4 | `boxes/<name>/compose.yml` | When present: box-specific overrides, e.g. the SSH agent |
+| 4 | `<code>/.phpbox/compose.yml`, `<code>/.phpbox/compose.*.yml` | When present: project files from the repository |
+| 5 | `boxes/<name>/compose.yml`, `boxes/<name>/compose.*.yml` | When present: box-specific overrides, e.g. the SSH agent |
 
-The project name is `phpbox-<name>` and `--env-file` is `boxes/<name>/.env`. Tags from `SERVICES` reach compose as `<NAME>_TAG` variables from `service_tags`.
+The project name is `phpbox-<name>` and `--env-file` is `boxes/<name>/.env`. `VARNISH_VCL` is `boxes/<name>/varnish.vcl` when it exists, otherwise `docker/varnish/default.vcl`. Tags from `SERVICES` reach compose as `<NAME>_TAG` variables from `service_tags`.

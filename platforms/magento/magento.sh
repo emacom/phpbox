@@ -119,7 +119,7 @@ php -d memory_limit=-1 bin/magento setup:install \
   --admin-user="$ADMIN_USER" --admin-password="$ADMIN_PASSWORD" \
   --language="$M_LOCALE" --currency="$M_CURRENCY" --timezone="$M_TZ" \
   "${search[@]}" --cleanup-database
-mods=$(bin/magento module:status --enabled | grep -E '^Magento_(AdminAdobeImsTwoFactorAuth|TwoFactorAuth)$' || true)
+mods=$(bin/magento module:status --enabled | grep -E '^(Magento_AdminAdobeImsTwoFactorAuth|Magento_TwoFactorAuth|MageOS_PasskeyAuth)$' || true)
 [[ -z "$mods" ]] || bin/magento module:disable $mods
 bin/magento deploy:mode:set developer
 bin/magento config:set general/country/default "$M_COUNTRY"
@@ -221,19 +221,9 @@ args=(--db-host=db --db-name="$DB_NAME" --db-user="$DB_USER" --db-password="$DB_
       --backend-frontname="$M_ADMIN")
 [[ -n "$M_PREFIX" ]] && args+=(--db-prefix="$M_PREFIX")
 [[ -n "$key" ]] && args+=(--key="$key")
-kv=""
-[[ " $SERVICES " == *" redis "* ]] && kv=redis
-[[ " $SERVICES " == *" valkey "* ]] && kv=valkey
-if [[ -z "$kv" ]]; then
-  args+=(--session-save=files)
-else
-  args+=(--session-save=redis --session-save-redis-host="$kv" --session-save-redis-db=2
-         --cache-backend=redis --cache-backend-redis-server="$kv" --cache-backend-redis-db=0
-         --page-cache=redis --page-cache-redis-server="$kv" --page-cache-redis-db=1)
-fi
-if [[ " $SERVICES " == *" rabbitmq "* ]]; then
-  args+=(--amqp-host=rabbitmq --amqp-port=5672 --amqp-user=guest --amqp-password=guest --amqp-virtualhost=/)
-fi
+SH
+    _mage_service_args
+    cat <<'SH'
 if [[ "$(bin/magento setup:config:set --help)" == *--es-hosts* ]]; then
   args+=(--es-hosts=search:9200 --es-enable-ssl=0)
 fi
@@ -253,6 +243,96 @@ bin/magento cache:flush
 SH
   } | php_run -e M_PREFIX="$prefix" -e M_ADMIN="$P_ADMIN_PATH" -e SERVICES="$(service_names)" || return 1
   compose exec -T web nginx -s reload
+  if has_service varnish; then _mage_varnish add; fi
+}
+
+# Print a bash fragment appending to args the setup:config:set options of Redis or Valkey and RabbitMQ from SERVICES.
+_mage_service_args() {
+  cat <<'SH'
+kv=""
+[[ " $SERVICES " == *" redis "* ]] && kv=redis
+[[ " $SERVICES " == *" valkey "* ]] && kv=valkey
+if [[ -z "$kv" ]]; then
+  args+=(--session-save=files)
+else
+  args+=(--session-save=redis --session-save-redis-host="$kv" --session-save-redis-db=2
+         --cache-backend=redis --cache-backend-redis-server="$kv" --cache-backend-redis-db=0
+         --page-cache=redis --page-cache-redis-server="$kv" --page-cache-redis-db=1)
+fi
+if [[ " $SERVICES " == *" rabbitmq "* ]]; then
+  args+=(--amqp-host=rabbitmq --amqp-port=5672 --amqp-user=guest --amqp-password=guest --amqp-virtualhost=/)
+fi
+SH
+}
+
+# Point app/etc/env.php at the services after phpbox service add|remove: p_service_changed <add|remove> <service>
+p_service_changed() {
+  case "$2" in
+    redis|valkey|rabbitmq) ;;
+    varnish) _mage_varnish "$1"; return ;;
+    *) return 0 ;;
+  esac
+  [[ -f "$WWW_DIR/app/etc/env.php" ]] || { log "No app/etc/env.php yet; phpbox db-import configures $2"; return 0; }
+  log "app/etc/env.php for $(service_names)…"
+  {
+    cat <<'SH'
+set -euo pipefail
+php -r '$f = "app/etc/env.php"; $c = include $f; $s = " " . getenv("SERVICES") . " ";
+  if (strpos($s, " redis ") === false && strpos($s, " valkey ") === false) {
+    foreach (["default", "page_cache"] as $id) { unset($c["cache"]["frontend"][$id]["backend"], $c["cache"]["frontend"][$id]["backend_options"]); }
+    $c["session"] = ["save" => "files"];
+  }
+  if (strpos($s, " rabbitmq ") === false) { unset($c["queue"]["amqp"]); }
+  file_put_contents($f, "<?php\nreturn " . var_export($c, true) . ";\n");'
+args=()
+SH
+    _mage_service_args
+    cat <<'SH'
+bin/magento setup:config:set -n "${args[@]}"
+bin/magento cache:flush
+SH
+  } | php_run -e SERVICES="$(service_names)"
+}
+
+# Switch the full page cache to the varnish service or back to the built-in cache: _mage_varnish <add|remove>
+_mage_varnish() {
+  local vcl="$BOXES_DIR/$NAME/varnish.vcl"
+  [[ -f "$WWW_DIR/app/etc/env.php" ]] || { log "No app/etc/env.php yet; phpbox db-import configures Varnish"; return 0; }
+  if [[ "$1" == remove ]]; then
+    log "Full page cache: built-in…"
+    rm -f "$vcl"
+    php_run <<'SH'
+set -euo pipefail
+php -r '$f = "app/etc/env.php"; $c = include $f; unset($c["http_cache_hosts"]);
+  file_put_contents($f, "<?php\nreturn " . var_export($c, true) . ";\n");'
+bin/magento config:set system/full_page_cache/caching_application 1
+bin/magento cache:flush
+SH
+    return
+  fi
+  log "Full page cache: Varnish…"
+  php_run <<'SH' > "$vcl.tmp" || { rm -f "$vcl.tmp"; return 1; }
+set -euo pipefail
+bin/magento config:set system/full_page_cache/caching_application 2 >&2
+bin/magento config:set system/full_page_cache/varnish/backend_host web >&2
+bin/magento config:set system/full_page_cache/varnish/backend_port 8080 >&2
+bin/magento setup:config:set -n --http-cache-hosts=varnish:80 >&2
+bin/magento cache:flush >&2
+bin/magento varnish:vcl:generate --export-version=6 --backend-host=web --backend-port=8080 --access-list=localhost --grace-period=300
+SH
+  sed -E -e 's/&#123;/{/g; s/&#125;/}/g' -e '/^acl purge \{/,/^\}/c\acl purge {\n    "10.0.0.0"/8;\n    "172.16.0.0"/12;\n    "192.168.0.0"/16;\n}' "$vcl.tmp" > "$vcl"
+  rm -f "$vcl.tmp"
+  compose up -d --wait --force-recreate varnish
+}
+
+# Print the tables of a db-import --strip group: p_strip_group <log|sessions|quotes>
+p_strip_group() {
+  case "$1" in
+    log)      echo "customer_log customer_visitor report_compared_product_index report_event report_viewed_product_index" ;;
+    sessions) echo "session" ;;
+    quotes)   echo "quote quote_*" ;;
+    *)        return 1 ;;
+  esac
 }
 
 # Give every website/store with its own base URL a host <code>.<name>.localhost and nginx run-code maps.
