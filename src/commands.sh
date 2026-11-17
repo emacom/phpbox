@@ -47,16 +47,52 @@ cmd_clone() {
   echo "  Next step: phpbox db-import $NAME <dump.sql[.gz|.zst]>"
 }
 
-# Import a dump into a box and configure it for local use: cmd_db_import <name> <dump>
+# Use an existing project directory as the code of a new box, without copying or cloning it: cmd_add <platform> <path> [options]
+cmd_add() {
+  local platform="${1:-}" path="${2:-}" dir base; shift 2 || true
+  [[ -n "$platform" && -n "$path" ]] || die "Usage: phpbox add <platform> <path> [--name N] [--php X.Y] [--<service>]"
+  dir=$(realpath -e "$path" 2>/dev/null) && [[ -d "$dir" ]] || die "Not a directory: $path"
+  load_platform "$platform"
+  parse_options "$@"
+  base=$(basename "$dir"); base="${base,,}"; base="${base//[^a-z0-9-]/-}"
+  KIND=project
+  init_env "${OPT_NAME:-$base}" "$dir"
+  grep -qsxF "CODE_DIR=$(printf '%q' "$dir")" "$BOXES_DIR"/*/.env && die "Directory $dir already belongs to another environment (phpbox list)"
+  p_clone_detect
+  composer_detect
+  save_env
+  write_ssh_override
+
+  log "Starting containers…"
+  box_up
+  if [[ ! -d "$WWW_DIR/vendor" ]]; then
+    p_project_install || die "Dependency install failed. Fix and retry: phpbox shell $NAME → composer install"
+  fi
+  run_hooks post-start
+  ok "Code ready: $NAME ($WWW_DIR)"
+  echo "  Next step: phpbox db-import $NAME <dump.sql[.gz|.zst]>"
+}
+
+# Import a dump into a box and configure it for local use; --strip (default DB_STRIP) imports the listed tables empty: cmd_db_import <name> <dump> [--strip "<tables|@group>..."]
 cmd_db_import() {
-  local dump="${2:-}" reader=cat
+  local dump="${2:-}" reader=cat strip patterns
   load_env "${1:-}"
-  [[ -f "$dump" ]] || die "Usage: phpbox db-import <name> <dump.sql[.gz|.zst|.bz2]>"
+  shift $(($# < 2 ? $# : 2))
+  strip="$DB_STRIP"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --strip) strip="${2:-}"; shift $(($# < 2 ? $# : 2)) ;;
+      *) die "Unknown option: $1" ;;
+    esac
+  done
+  [[ -f "$dump" ]] || die "Usage: phpbox db-import <name> <dump.sql[.gz|.zst|.bz2]> [--strip \"<tables|@group>...\"]"
+  patterns=$(strip_patterns "$strip")
   command -v pv >/dev/null && reader=pv
   box_up
-  log "Import $(basename "$dump") ($(du -h "$dump" | cut -f1))…"
-  "$reader" "$dump" | dump_decompress "$dump" | dump_fix | db_load --max-allowed-packet=1G
+  log "Import $(basename "$dump") ($(du -h "$dump" | cut -f1))${patterns:+, empty: $patterns}…"
+  "$reader" "$dump" | dump_decompress "$dump" | dump_fix | dump_strip "$patterns" | db_load --max-allowed-packet=1G
   p_after_import || die "Post-import configuration failed"
+  run_hooks post-import
   take_snapshot
   ok "Done: $NAME"
   print_info
@@ -121,7 +157,30 @@ cmd_reset() {
 }
 
 # Start a box: cmd_start <name>
-cmd_start() { load_env "${1:-}"; box_up; print_info; }
+cmd_start() { load_env "${1:-}"; box_up; run_hooks post-start; print_info; }
+
+# Add or remove a service of a box, apply it to the containers and let the platform reconfigure: cmd_service <add|remove> <name> <service[:tag]>
+cmd_service() {
+  local action="${1:-}" service="${3:-}"
+  [[ ( "$action" == add || "$action" == remove ) && -n "$service" ]] || die "Usage: phpbox service <add|remove> <name> <service[:tag]> ($(services))"
+  load_env "${2:-}"
+  if [[ "$action" == add ]]; then
+    add_service "$service"
+  else
+    service="${service%%:*}"
+    has_service "$service" || die "Service '$service' is not used by '$NAME' ($SERVICES)"
+    [[ "$service" != "$SEARCH" ]] || die "'$service' is the search engine of '$NAME' (SEARCH in .env)"
+    remove_service "$service"
+  fi
+  save_env
+  log "Applying services: ${SERVICES:-none}…"
+  box_up --remove-orphans
+  if declare -F p_service_changed >/dev/null; then
+    p_service_changed "$action" "${service%%:*}" || die "Platform configuration for '$service' failed"
+  fi
+  run_hooks post-service-change -e PHPBOX_ACTION="$action" -e PHPBOX_SERVICE="${service%%:*}"
+  ok "Services of '$NAME': ${SERVICES:-none}"
+}
 
 # Stop a box and remove its containers: cmd_stop <name>
 cmd_stop() { load_env "${1:-}"; box_down; }
@@ -151,7 +210,7 @@ cmd_up() {
     while read -r n; do
       [[ -f "$BOXES_DIR/$n/.env" ]] || continue
       log "Starting '$n'…"
-      ( load_env "$n"; box_up >/dev/null ) </dev/null
+      ( load_env "$n"; box_up >/dev/null; run_hooks post-start ) </dev/null
     done < "$UP_FILE"
     rm -f "$UP_FILE"
   fi
@@ -163,7 +222,8 @@ cmd_remove() {
   local answer
   load_env "${1:-}"
   if [[ "${2:-}" != "-y" ]]; then
-    [[ "$KIND" == project ]] && echo "WARNING: the code directory is a git repository; unpushed changes will be lost ($WWW_DIR)"
+    if [[ -n "$CODE_DIR" ]]; then echo "The code directory stays: $CODE_DIR"
+    elif [[ "$KIND" == project ]]; then echo "WARNING: the code directory is a git repository; unpushed changes will be lost ($WWW_DIR)"; fi
     read -r -p "Remove environment '$NAME' with its database and files? [y/N] " answer
     [[ "$answer" =~ ^[yY]$ ]] || exit 0
   fi
@@ -174,11 +234,25 @@ cmd_remove() {
   ok "Removed '$NAME'"
 }
 
-# Print all boxes with platform, version, address and status; --size adds the disk size of boxes/<name>: cmd_list [--size]
+# Print the compose projects with a running container, space-separated and padded with spaces.
+running_projects() { echo " $(docker ps --filter label=com.docker.compose.project --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null | sort -u | paste -sd' ') "; }
+
+# Print all boxes with platform, version, address and status; --size adds the disk size of boxes/<name>, --json prints a JSON array: cmd_list [--size] [--json]
 # shellcheck disable=SC2120
 cmd_list() {
-  local f running size="" sizes=()
-  running=" $(docker ps --filter label=com.docker.compose.project --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null | sort -u | paste -sd' ') "
+  local f running size="" sizes=() n sep=""
+  running=$(running_projects)
+  if [[ "${1:-}" == --json ]]; then
+    echo "["
+    for f in "$BOXES_DIR"/*/.env; do
+      [[ -f "$f" ]] || continue
+      n=$(basename "$(dirname "$f")")
+      printf '%s' "$sep"; sep=","
+      ( load_env "$n" >/dev/null; box_json "$running" )
+    done
+    echo "]"
+    return 0
+  fi
   if [[ "${1:-}" == --size ]]; then
     mapfile -t sizes < <(du -sh "$BOXES_DIR"/*/ 2>/dev/null)
     size=SIZE
@@ -199,8 +273,52 @@ cmd_list() {
   done
 }
 
-# Print the addresses and credentials of a box: cmd_info <name>
-cmd_info() { load_env "${1:-}"; print_info; print_stack; }
+# Print the addresses and credentials of a box; --json prints them with the containers as one JSON object: cmd_info <name> [--json]
+cmd_info() {
+  load_env "${1:-}"
+  if [[ "${2:-}" == --json ]]; then
+    box_json "$(running_projects)" "$(compose ps -a --format json 2>/dev/null)"
+    return 0
+  fi
+  print_info; print_stack
+}
+
+# Print the features of this phpbox for scripts and plugins as a JSON object.
+cmd_capabilities() {
+  python3 -I -c 'import json, sys; print(json.dumps({"capabilities": sys.argv[1:]}))' \
+    add db-import-strip hooks info-json list-json nginx-includes project-config service
+}
+
+# Print the loaded box as JSON; the second argument is the output of compose ps --format json: box_json <running-projects> [containers-json]
+box_json() {
+  local status=stopped
+  [[ "$1" == *" phpbox-$NAME "* ]] && status=running
+  J_NAME="$NAME" J_PLATFORM="$PLATFORM" J_TITLE="$P_TITLE" J_VERSION="$VERSION" J_KIND="$KIND" J_PHP="$PHP_VERSION" \
+  J_DB_IMAGE="$DB_IMAGE" J_URL="$(shop_url)" J_STATUS="$status" J_CODE_DIR="$WWW_DIR" J_EXTERNAL="${CODE_DIR:+1}" \
+  J_BOX_DIR="$BOXES_DIR/$NAME" J_SERVICES="$SERVICES" J_DB_PORT="$DB_PORT" J_DB_NAME="$DB_NAME" J_DB_USER="$DB_USER" \
+  J_DB_PASS="$DB_PASS" J_DB_ROOT_PASS="$DB_ROOT_PASS" J_ADMIN_PATH="${P_ADMIN_PATH:-}" J_ADMIN_USER="$ADMIN_USER" \
+  J_ADMIN_PASSWORD="$ADMIN_PASSWORD" J_CONTAINERS="${2-}" J_WITH_CONTAINERS="${2+1}" \
+    python3 -I -c 'import json, os
+e = os.environ
+box = {
+    "name": e["J_NAME"], "platform": e["J_PLATFORM"], "title": e["J_TITLE"], "version": e["J_VERSION"],
+    "kind": e["J_KIND"], "php": e["J_PHP"], "status": e["J_STATUS"], "url": e["J_URL"],
+    "admin": {"url": e["J_URL"] + "/" + e["J_ADMIN_PATH"], "user": e["J_ADMIN_USER"], "password": e["J_ADMIN_PASSWORD"]}
+             if e["J_ADMIN_PATH"] else None,
+    "code_dir": e["J_CODE_DIR"], "external_code": bool(e["J_EXTERNAL"]), "box_dir": e["J_BOX_DIR"],
+    "services": [{"name": s.split(":", 1)[0], "tag": s.split(":", 1)[1] if ":" in s else None} for s in e["J_SERVICES"].split()],
+    "database": {"host": "127.0.0.1", "port": int(e["J_DB_PORT"]), "name": e["J_DB_NAME"], "user": e["J_DB_USER"],
+                 "password": e["J_DB_PASS"], "root_password": e["J_DB_ROOT_PASS"], "image": e["J_DB_IMAGE"]},
+}
+hosts = os.path.join(e["J_BOX_DIR"], "nginx", "hosts")
+if os.path.isfile(hosts):
+    box["stores"] = [dict(zip(("type", "code", "url"), line.split())) for line in open(hosts) if line.strip()]
+if e["J_WITH_CONTAINERS"]:
+    raw = e["J_CONTAINERS"].strip()
+    rows = json.loads(raw) if raw.startswith("[") else [json.loads(l) for l in raw.splitlines() if l.strip()]
+    box["containers"] = [{"service": r.get("Service"), "name": r.get("Name"), "image": r.get("Image"), "state": r.get("State")} for r in rows]
+print(json.dumps(box, indent=None))'
+}
 
 # Print the versions a platform can install: cmd_versions <platform>
 cmd_versions() { [[ -n "${1:-}" ]] || die "Usage: phpbox versions <platform> ($(platforms))"; load_platform "$1"; p_versions; }

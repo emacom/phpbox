@@ -17,6 +17,7 @@ BASE_PORT=45000
 section "Command line"
 check "help exits 0" "$ROOT_DIR/phpbox" help
 contains "help lists commands" "$("$ROOT_DIR/phpbox" help)" "create <platform> <version>"
+contains "help lists add and service" "$("$ROOT_DIR/phpbox" help)" "service add|remove <name> <svc>"
 contains "help lists platforms" "$("$ROOT_DIR/phpbox" help)" "Platforms: laravel magento mageos prestashop shopware symfony woocommerce"
 check_fails "unknown command exits 1" "$ROOT_DIR/phpbox" nope
 check_fails "create without arguments fails" "$ROOT_DIR/phpbox" create
@@ -97,6 +98,105 @@ eq "dump_fix removes MySQL 8 version comments" "$(echo 'a /*!80016 DEFAULT ENCRY
 eq "dump_fix removes GTID_PURGED" "$(printf 'SET @@GLOBAL.GTID_PURGED=/*!80000 */\n  "x:1";\nnext\n' | dump_fix)" "next"
 eq "dump_decompress reads .gz" "$(echo hello | gzip | dump_decompress dump.sql.gz)" "hello"
 eq "dump_decompress passes .sql" "$(echo hello | dump_decompress dump.sql)" "hello"
+
+section "Project directory (add)"
+mkdir -p "$TMP/fakebin"
+cat > "$TMP/fakebin/docker" <<'SH'
+#!/bin/sh
+case "$*" in
+  *"ps -a --format json"*) printf '%s\n' "${FAKE_PS:-}" ;;
+  *) printf '%s\n' "$@" | grep '\.yml$'; env | grep '^VARNISH_VCL=' ;;
+esac
+SH
+chmod +x "$TMP/fakebin/docker"
+mkdir -p "$TMP/project/.phpbox/hooks" "$TMP/project/.phpbox/nginx"
+eq "init_env with a code directory sets CODE_DIR and WWW_DIR" \
+  "$(init_env ext "$TMP/project"; echo "$CODE_DIR|$WWW_DIR")" "$TMP/project|$TMP/project"
+eq "init_env without a code directory clears CODE_DIR" "$(CODE_DIR=/x; init_env plain; echo "${CODE_DIR}|$WWW_DIR")" "|$PHPBOX_BOXES_DIR/plain/plain"
+eq "save_env and load_env keep CODE_DIR and DB_STRIP" "$(
+  load_platform symfony; init_env ext "$TMP/project"
+  VERSION=- PHP_VERSION=8.3 DB_IMAGE=mariadb:11.4 KIND=project DB_STRIP="@log x_*"
+  save_env >/dev/null
+  unset CODE_DIR DB_STRIP WWW_DIR
+  load_env ext
+  echo "$CODE_DIR|$WWW_DIR|$DB_STRIP"
+)" "$TMP/project|$TMP/project|@log x_*"
+eq "a box without CODE_DIR keeps boxes/<name>/<name>" "$(load_env roundtrip; echo "$WWW_DIR")" "$PHPBOX_BOXES_DIR/roundtrip/roundtrip"
+check_fails "add of a missing directory fails" "$ROOT_DIR/phpbox" add symfony "$TMP/missing"
+check_fails "add of a directory used by another box fails" bash -c "source '$ROOT_DIR/phpbox'; BASE_PORT=45100; cmd_add symfony '$TMP/project' --name other"
+contains "list shows the project directory box" "$(cmd_list)" "ext "
+eq "compose loads .phpbox and box files after the services" "$(
+  PATH="$TMP/fakebin:$PATH"
+  load_env ext; touch "$TMP/project/.phpbox/compose.yml" "$TMP/project/.phpbox/compose.local.yml" "$PHPBOX_BOXES_DIR/ext/compose.dev.yml"
+  SERVICES=redis; compose config | grep -v VARNISH | sed "s#$ROOT_DIR#R#; s#$TMP#T#" | paste -sd' '
+)" "R/docker/compose.yml R/docker/services/redis.yml T/project/.phpbox/compose.yml T/project/.phpbox/compose.local.yml T/boxes/ext/compose.dev.yml"
+rm -f "$TMP/project/.phpbox/compose.yml" "$TMP/project/.phpbox/compose.local.yml" "$PHPBOX_BOXES_DIR/ext/compose.dev.yml"
+eq "compose passes the box VCL when it exists" "$(
+  PATH="$TMP/fakebin:$PATH"
+  load_env ext; { compose config; touch "$PHPBOX_BOXES_DIR/ext/varnish.vcl"; compose config; rm "$PHPBOX_BOXES_DIR/ext/varnish.vcl"; } | grep VARNISH | sed "s#$ROOT_DIR#R#; s#$TMP#T#"
+)" "VARNISH_VCL=R/docker/varnish/default.vcl
+VARNISH_VCL=T/boxes/ext/varnish.vcl"
+
+section "Hooks"
+printf 'echo project\n' > "$TMP/project/.phpbox/hooks/post-import"
+mkdir -p "$PHPBOX_BOXES_DIR/ext/hooks" && printf 'echo box\n' > "$PHPBOX_BOXES_DIR/ext/hooks/post-import"
+eq "run_hooks runs the project hook, then the box hook, in php with the event" "$(
+  php_run() { echo "$*|$(cat)"; }
+  load_env ext; run_hooks post-import -e X=1 | grep -v '→' | sed "s#https://ext.localhost#URL#"
+)" "-e PHPBOX_EVENT=post-import -e PHPBOX_NAME=ext -e SHOP_URL=URL -e SERVICES= -e X=1|echo project
+-e PHPBOX_EVENT=post-import -e PHPBOX_NAME=ext -e SHOP_URL=URL -e SERVICES= -e X=1|echo box"
+eq "run_hooks without hook files does nothing" "$(php_run() { echo called; }; load_env ext; run_hooks post-start)" ""
+check_fails "a failing hook stops" bash -c "source '$ROOT_DIR/phpbox'; php_run() { cat >/dev/null; return 1; }; load_env ext; run_hooks post-import"
+
+section "Services of a box"
+eq "remove_service drops the service with its tag" "$(SERVICES="redis:7.4-alpine node opensearch"; remove_service redis; echo "$SERVICES")" "node opensearch"
+eq "service add saves SERVICES, applies them and runs the platform hook" "$(
+  box_up() { echo "up $*"; }; run_hooks() { echo "hook $*"; }; p_service_changed() { echo "platform $*"; }
+  cmd_service add ext varnish 2>&1 | grep -v '✔\|→'; load_env ext; echo "$SERVICES"
+)" "up --remove-orphans
+platform add varnish
+hook post-service-change -e PHPBOX_ACTION=add -e PHPBOX_SERVICE=varnish
+varnish"
+eq "service remove drops it again" "$(
+  box_up() { :; }; run_hooks() { :; }
+  cmd_service remove ext varnish >/dev/null; load_env ext; echo "[$SERVICES]"
+)" "[]"
+check_fails "service remove of an unused service fails" bash -c "source '$ROOT_DIR/phpbox'; cmd_service remove ext redis"
+check_fails "service add of an unknown service fails" bash -c "source '$ROOT_DIR/phpbox'; cmd_service add ext nope"
+check_fails "the search engine cannot be removed" bash -c "source '$ROOT_DIR/phpbox'; box_up() { :; }; load_env ext; SEARCH=opensearch; SERVICES=opensearch; save_env >/dev/null; printf 'SEARCH=opensearch\n' >> '$PHPBOX_BOXES_DIR/ext/.env'; cmd_service remove ext opensearch"
+sed -i '/^SEARCH=/d; s/^SERVICES=.*/SERVICES=/' "$PHPBOX_BOXES_DIR/ext/.env"
+
+section "JSON output"
+eq "list --json gives a valid array with the project directory" "$(
+  docker() { echo phpbox-ext; }
+  cmd_list --json | python3 -I -c 'import json, sys; b = {x["name"]: x for x in json.load(sys.stdin)}; e = b["ext"]; print(e["status"], e["external_code"], e["code_dir"] == sys.argv[1], e["database"]["port"] > 0, b["roundtrip"]["status"])' "$TMP/project"
+)" "running True True True stopped"
+eq "info --json adds containers from compose ps" "$(
+  docker() { echo phpbox-ext; }; PATH="$TMP/fakebin:$PATH"; export FAKE_PS='{"Service":"php","Name":"phpbox-ext-php-1","Image":"x","State":"running"}'
+  cmd_info ext --json | python3 -I -c 'import json, sys; d = json.load(sys.stdin); print(d["containers"][0]["service"], d["containers"][0]["state"], d["platform"])'
+)" "php running symfony"
+eq "info --json reads a compose ps array too" "$(
+  docker() { :; }; PATH="$TMP/fakebin:$PATH"; export FAKE_PS='[{"Service":"db","State":"exited"}]'
+  cmd_info ext --json | python3 -I -c 'import json, sys; d = json.load(sys.stdin); print(d["containers"][0]["service"], d["status"])'
+)" "db stopped"
+eq "capabilities lists the features" "$(cmd_capabilities | python3 -I -c 'import json, sys; print(" ".join(json.load(sys.stdin)["capabilities"]))')" \
+  "add db-import-strip hooks info-json list-json nginx-includes project-config service"
+
+section "Database dumps (strip)"
+eq "strip_patterns expands Magento groups and keeps tables" "$(load_platform magento; strip_patterns "@sessions @quotes custom_*")" "session,quote,quote_*,custom_*"
+check_fails "strip_patterns stops on an unknown group" bash -c "source '$ROOT_DIR/phpbox'; load_platform magento; strip_patterns @nope"
+check_fails "strip_patterns stops on a group of a platform without groups" bash -c "source '$ROOT_DIR/phpbox'; load_platform symfony; strip_patterns @log"
+DUMP=$'CREATE TABLE `session` (id int);\nINSERT INTO `session` VALUES (1),(2);\nINSERT INTO `quote` VALUES\n(1),\n(2);\nINSERT INTO `quote_item` (`a`) VALUES (1);\nINSERT INTO `quotes_x` VALUES (1);\nINSERT INTO `core_config_data` VALUES (1);'
+eq "dump_strip drops single-line, multi-line and column-list INSERTs of matching tables" "$(dump_strip "session,quote,quote_*" <<<"$DUMP")" \
+  $'CREATE TABLE `session` (id int);\nINSERT INTO `quotes_x` VALUES (1);\nINSERT INTO `core_config_data` VALUES (1);'
+eq "dump_strip without patterns passes the dump" "$(dump_strip "" <<<"$DUMP")" "$DUMP"
+check_fails "db-import with an unknown option fails" bash -c "source '$ROOT_DIR/phpbox'; cmd_db_import ext /dev/null --nope"
+
+section "nginx"
+for f in "$ROOT_DIR"/platforms/*/nginx.conf; do
+  eq "${f#"$ROOT_DIR"/} includes the service, box and project files" \
+    "$(grep -c 'include /etc/nginx/services/\*.server.conf;\|include /etc/nginx/phpbox/\*.server.conf;\|include /var/www/html/.phpbox/nginx/\*.server.conf;\|include /etc/nginx/phpbox/\*.http.conf;\|include /var/www/html/.phpbox/nginx/\*.http.conf;' "$f")" "5"
+done
 
 section "Versions (src/versions.py)"
 PS_API='[

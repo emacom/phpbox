@@ -33,7 +33,7 @@ CONF_FILE="${PHPBOX_CONF:-$ROOT/phpbox.conf}"
 PHP_IMAGE=mmilewski/php-fpm
 PHP_VERSIONS="7.3 7.4 8.0 8.1 8.2 8.3 8.4 8.5"
 DB_USER=shop DB_PASS=shop DB_ROOT_PASS=root
-ENV_KEYS="PLATFORM NAME VERSION PORT DB_PORT DB_NAME PHP_VERSION DB_IMAGE DOWNLOAD_URL SHOP_HOST SHOP_LANG SHOP_COUNTRY SHOP_CURRENCY SHOP_TZ ADMIN_USER ADMIN_EMAIL ADMIN_PASSWORD HOST_UID HOST_GID KIND SERVICES COMPOSER_PHAR"
+ENV_KEYS="PLATFORM NAME VERSION PORT DB_PORT DB_NAME PHP_VERSION DB_IMAGE DOWNLOAD_URL SHOP_HOST SHOP_LANG SHOP_COUNTRY SHOP_CURRENCY SHOP_TZ ADMIN_USER ADMIN_EMAIL ADMIN_PASSWORD HOST_UID HOST_GID KIND SERVICES COMPOSER_PHAR CODE_DIR DB_STRIP"
 OPT_NAME="" OPT_PHP="" OPT_BRANCH=""
 
 for lib in core docker tls database commands update; do
@@ -52,15 +52,20 @@ phpbox — local PHP shops and apps on Docker, with snapshots
         [--name N] [--lang xx] [--php X.Y] [--<service>]  (+ platform options, see README)
   clone <platform> <git-repo> [opts]   project from a repository (no database)
         [--branch B] [--name N] [--php X.Y] [--<service>]
-  db-import <name> <dump>              import database and configure it for local use
+  add <platform> <path> [opts]         existing project directory as a box (no copy, no database)
+        [--name N] [--php X.Y] [--<service>]
+  db-import <name> <dump> [--strip L]  import database and configure it for local use
+                                       (--strip: tables or @groups imported empty)
   copy <source> <name>                 copy an environment with its current database
   snapshot <name>                      current state becomes the new reset point
   reset <name> [--db-only]             restore snapshot (cloned project: database only)
   start|stop <name>                    start / stop one environment
+  service add|remove <name> <svc>      add or remove a service and reconfigure the platform
   up|down                              start / stop phpbox (down remembers running environments)
   remove <name> [-y]                   remove environment with its database and files
-  list [--size]                        list environments (--size: disk usage, slower)
-  info <name>                          URLs, credentials, PHP, size, volumes, containers
+  list [--size] [--json]               list environments (--size: disk usage, slower)
+  info <name> [--json]                 URLs, credentials, PHP, size, volumes, containers
+  capabilities                         features of this phpbox as JSON, for plugins
   versions <platform>                  available versions
   shell <name> [service]               shell in the PHP (or given service) container
   exec <name> [--service S] <cmd...>   run a command in the PHP (or given service) container, no TTY
@@ -92,7 +97,7 @@ for b in docker rsync curl; do command -v "$b" >/dev/null || die "Missing progra
 cmd="${1:-help}"; shift || true
 update_notice
 case "$cmd" in
-  create|clone|copy|snapshot|reset|start|stop|up|down|remove|list|info|versions|shell|exec|db|logs) "cmd_$cmd" "$@" ;;
+  create|clone|add|copy|snapshot|reset|start|stop|up|down|remove|list|info|versions|shell|exec|db|logs|service|capabilities) "cmd_$cmd" "$@" ;;
   db-import) cmd_db_import "$@" ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;

@@ -34,6 +34,13 @@ add_service() {
   SERVICES="$out"
 }
 
+# Remove a service from SERVICES: remove_service <name>
+remove_service() {
+  local s out=""
+  for s in $SERVICES; do [[ "${s%%:*}" == "$1" ]] || out="${out:+$out }$s"; done
+  SERVICES="$out"
+}
+
 # Set the image tag of a service listed in SERVICES without one: service_default <name> <tag>
 service_default() {
   [[ " $SERVICES " == *" $1 "* ]] && add_service "$1:$2"
@@ -82,10 +89,11 @@ load_platform() {
   source "$f"
 }
 
-# Set WWW_DIR to boxes/<name>/<name>, or to boxes/<name>/www for boxes created before the rename.
+# Set WWW_DIR to CODE_DIR, boxes/<name>/<name>, or boxes/<name>/www for boxes created before the rename.
 set_www_dir() {
   WWW_DIR="$BOXES_DIR/$NAME/$NAME"
   [[ -d "$BOXES_DIR/$NAME/www" ]] && WWW_DIR="$BOXES_DIR/$NAME/www"
+  [[ -n "${CODE_DIR:-}" ]] && WWW_DIR="$CODE_DIR"
   return 0
 }
 
@@ -94,17 +102,17 @@ load_env() {
   NAME="${1:-}"; [[ -n "$NAME" ]] || die "Environment name required (phpbox list)"
   ENV_FILE="$BOXES_DIR/$NAME/.env"
   [[ -f "$ENV_FILE" ]] || die "Environment '$NAME' does not exist"
-  set_www_dir
-  SHOP_HOST=localhost KIND=fresh SERVICES="" DB_NAME=shop SEARCH=""
+  SHOP_HOST=localhost KIND=fresh SERVICES="" DB_NAME=shop SEARCH="" CODE_DIR="" DB_STRIP=""
   # shellcheck source=/dev/null
   source "$ENV_FILE"
+  set_www_dir
   [[ -n "$SEARCH" ]] && add_service "$SEARCH"
   load_platform "$PLATFORM"
 }
 
-# Validate a new box name and set NAME, ports, host and paths: init_env <name>
+# Validate a new box name and set NAME, ports, host and paths; a code directory outside boxes/ becomes CODE_DIR: init_env <name> [code-dir]
 init_env() {
-  NAME="$1"
+  NAME="$1" CODE_DIR="${2:-}"
   [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "Name: lowercase letters, digits and '-' only"
   [[ " $SHARED_HOSTS " == *" $NAME "* ]] && die "Name '$NAME' is reserved for $NAME.localhost"
   [[ " snapshot nginx " == *" $NAME "* ]] && die "Name '$NAME' is reserved for boxes/<name>/$NAME"

@@ -1,17 +1,20 @@
 # shellcheck shell=bash disable=SC2034
 
-# Run docker compose for the loaded box with its platform overlays, services, box overrides (compose.yml, compose.*.yml), image tags and variables: compose <args...>
+# Run docker compose for the loaded box with its platform overlays, services, project files (.phpbox/compose.yml, compose.*.yml), box overrides (compose.yml, compose.*.yml), image tags and variables: compose <args...>
 compose() {
-  local files=(-f "$ROOT/docker/compose.yml") f s tags
+  local files=(-f "$ROOT/docker/compose.yml") f s tags vcl="$ROOT/docker/varnish/default.vcl"
   for f in "${P_COMPOSE[@]}"; do files+=(-f "$f"); done
   for s in $SERVICES; do files+=(-f "$ROOT/docker/services/${s%%:*}.yml"); done
   mapfile -t tags < <(service_tags)
-  [[ -f "$BOXES_DIR/$NAME/compose.yml" ]] && files+=(-f "$BOXES_DIR/$NAME/compose.yml")
-  for f in "$BOXES_DIR/$NAME"/compose.*.yml; do [[ -f "$f" ]] && files+=(-f "$f"); done
+  for f in "$WWW_DIR/.phpbox/compose.yml" "$WWW_DIR"/.phpbox/compose.*.yml \
+           "$BOXES_DIR/$NAME/compose.yml" "$BOXES_DIR/$NAME"/compose.*.yml; do
+    [[ -f "$f" ]] && files+=(-f "$f")
+  done
+  [[ -f "$BOXES_DIR/$NAME/varnish.vcl" ]] && vcl="$BOXES_DIR/$NAME/varnish.vcl"
   mkdir -p "$BOXES_DIR/$NAME/nginx"
   ENV_DIR="$BOXES_DIR/$NAME" WWW_DIR="$WWW_DIR" CACHE_DIR="$CACHE_DIR" NGINX_CONF="$P_NGINX_CONF" \
   HTTP_PORT="$HTTP_PORT" HTTPS_PORT="$HTTPS_PORT" RABBITMQ_PORT=$((PORT + 20000)) \
-  PHP_IMAGE="$PHP_IMAGE" CRON_COMMAND="$P_CRON" \
+  PHP_IMAGE="$PHP_IMAGE" CRON_COMMAND="$P_CRON" VARNISH_VCL="$vcl" \
   DB_NAME="$DB_NAME" DB_USER="$DB_USER" DB_PASS="$DB_PASS" DB_ROOT_PASS="$DB_ROOT_PASS" \
   ADMIN_USER="$ADMIN_USER" ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     env "${tags[@]}" docker compose -p "phpbox-$NAME" --env-file "$ENV_FILE" "${files[@]}" "$@"
@@ -22,6 +25,17 @@ php_run() {
   local script
   script=$(cat)
   compose exec -T "$@" php bash -c "$script" </dev/null
+}
+
+# Run the hook scripts of an event from <code>/.phpbox/hooks and boxes/<name>/hooks in the php container: run_hooks <event> [-e K=V...]
+run_hooks() {
+  local event="$1" f; shift
+  for f in "$WWW_DIR/.phpbox/hooks/$event" "$BOXES_DIR/$NAME/hooks/$event"; do
+    [[ -f "$f" ]] || continue
+    log "Hook $event: $f"
+    php_run -e PHPBOX_EVENT="$event" -e PHPBOX_NAME="$NAME" -e SHOP_URL="$(shop_url)" -e SERVICES="$(service_names)" "$@" < "$f" \
+      || die "Hook failed: $f"
+  done
 }
 
 # Run docker compose for the shared proxy, Mailpit and phpMyAdmin from docker/shared.yml: shared <args...>

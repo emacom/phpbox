@@ -1,0 +1,18 @@
+services:
+  varnish:
+    image: varnish:${VARNISH_TAG:-7.6-alpine}
+    environment:
+      VARNISH_SIZE: ${VARNISH_SIZE:-256M}
+    volumes:
+      - ${VARNISH_VCL}:/etc/varnish/default.vcl:ro
+    healthcheck:
+      test: ["CMD", "varnishadm", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      - web
+
+  web:
+    volumes:
+      - ./nginx/varnish.server.conf:/etc/nginx/services/varnish.server.conf:ro

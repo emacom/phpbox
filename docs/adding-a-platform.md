@@ -37,6 +37,8 @@ A platform is a `platforms/<name>/` directory. The directory name is the `<platf
 | `p_clone_detect` | no | `clone` | Sets `VERSION`, `PHP_VERSION`, `DB_IMAGE` based on `WWW_DIR` |
 | `p_project_install` | no | `clone` | Installs project dependencies |
 | `p_after_import` | no | `db-import` | Configures the imported database and files for the box |
+| `p_service_changed <add\|remove> <service>` | no | `service` | Updates the platform configuration after `SERVICES` changed and the containers were recreated |
+| `p_strip_group <group>` | no | `db-import --strip @<group>` | Prints the table patterns of a group, separated by spaces. Returns 1 for an unknown group |
 
 A service required by the platform is added with `add_service <service>` in `p_resolve` and `p_clone_detect`. Example: `_mage_services` in `platforms/magento/magento.sh`.
 
@@ -83,6 +85,8 @@ A new version API requires a `rows_<source>` function in `src/versions.py`.
 | `root /var/www/html;` | `WWW_DIR` is mounted at this path in `web` and `php` |
 | `fastcgi_pass php:9000;` | PHP-FPM service in the box compose project |
 | `fastcgi_param HTTPS $fastcgi_https if_not_empty;` with the `$fastcgi_https` map | TLS terminates in `phpbox-proxy`, PHP learns about HTTPS from the header |
+| `include /etc/nginx/phpbox/*.http.conf;` and `include /var/www/html/.phpbox/nginx/*.http.conf;` before `server` | Box and project files in the `http` context |
+| `include /etc/nginx/services/*.server.conf;`, `include /etc/nginx/phpbox/*.server.conf;`, `include /var/www/html/.phpbox/nginx/*.server.conf;` in `server` | Service, box and project files, e.g. the `varnish` service. A pattern without matching files is skipped |
 
 Full file: see "Skeletons".
 
@@ -148,6 +152,9 @@ INFO
 ### `platforms/example/nginx.conf`
 
 ```nginx
+include /etc/nginx/phpbox/*.http.conf;
+include /var/www/html/.phpbox/nginx/*.http.conf;
+
 map $http_x_forwarded_proto $fastcgi_https {
     https on;
     default "";
@@ -155,6 +162,9 @@ map $http_x_forwarded_proto $fastcgi_https {
 
 server {
     listen 80 default_server;
+    include /etc/nginx/services/*.server.conf;
+    include /etc/nginx/phpbox/*.server.conf;
+    include /var/www/html/.phpbox/nginx/*.server.conf;
     root /var/www/html;
     index index.php;
     client_max_body_size 64M;
